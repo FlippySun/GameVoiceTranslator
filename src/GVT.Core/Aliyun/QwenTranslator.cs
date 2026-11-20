@@ -15,7 +15,7 @@ public sealed class QwenTranslator : ITranslator
     private static readonly HttpClient Http = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(10),
     });
 
     public const string Domain =
@@ -32,6 +32,19 @@ public sealed class QwenTranslator : ITranslator
         _cfg = cfg;
         _apiKey = apiKey;
         _glossary = glossary;
+    }
+
+    /// <summary>请求一次免费的模型列表接口，只为建立并保持连接。失败无所谓。</summary>
+    public async Task WarmUpAsync()
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, _cfg.CompatibleBaseUrl.TrimEnd('/') + "/models");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            using var cts = new CancellationTokenSource(5000);
+            using var resp = await Http.SendAsync(req, cts.Token).ConfigureAwait(false);
+        }
+        catch { }
     }
 
     public async Task<TranslationResult> TranslateAsync(string text, Direction direction, IReadOnlyList<string> recentContext, CancellationToken ct)

@@ -62,3 +62,18 @@ public class TextTests
         Assert.Equal(0.33 + 1.0, u.CostYuan, 3);
     }
 }
+
+public class FillerTests
+{
+    [Theory]
+    [InlineData("hmm.", true)]
+    [InlineData("Uh, um...", true)]
+    [InlineData("嗯。", true)]
+    [InlineData("呃，啊", true)]
+    [InlineData("Yeah.", false)]
+    [InlineData("Uh, enemy behind you", false)]
+    [InlineData("嗯，左边", false)]
+    [InlineData("。", true)]
+    public void SkipsFillerOnlyUtterances(string text, bool noise)
+        => Assert.Equal(noise, GVT.Core.Pipeline.TranslationChannel.IsNoise(text));
+}

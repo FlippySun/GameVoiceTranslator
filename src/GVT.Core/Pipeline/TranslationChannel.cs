@@ -302,8 +302,19 @@ public sealed class TranslationChannel
         return _opt.Direction == Direction.EnToZh ? r > 0.6 : r < 0.1 && text.Any(char.IsLetter);
     }
 
-    private static bool IsNoise(string text)
-        => string.IsNullOrWhiteSpace(text) || text.All(c => !char.IsLetterOrDigit(c));
+    private static readonly HashSet<string> Fillers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "hmm", "hm", "mm", "mmm", "uh", "um", "uhm", "er", "erm", "ah", "eh", "oh", "huh", "ha",
+        "嗯", "啊", "呃", "哦", "额", "唉", "哈", "嗯嗯", "啊啊",
+    };
+
+    /// <summary>空内容、纯标点或纯语气词（hmm、uh、嗯、呃……）不翻译也不播报。</summary>
+    internal static bool IsNoise(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.All(c => !char.IsLetterOrDigit(c))) return true;
+        var parts = text.Split(new[] { ' ', ',', '.', '!', '?', '，', '。', '！', '？', '…', '、' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 && parts.All(Fillers.Contains);
+    }
 
     private float[] LeadIn(int rate)
     {

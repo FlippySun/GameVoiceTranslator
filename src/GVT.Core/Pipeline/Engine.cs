@@ -37,6 +37,7 @@ public sealed class Engine : IDisposable
     private VadSegmenter? _sendVad, _recvVad;
     private PassthroughProvider? _passthrough;
     private Timer? _duckTimer;
+    private Timer? _warmTimer;
     private volatile bool _pttDown;
     private volatile bool _holdOriginal;
     private float _lastPan;
@@ -71,6 +72,8 @@ public sealed class Engine : IDisposable
             StartSend();
             StartReceive();
             _duckTimer = new Timer(_ => UpdateDucking(), null, 0, 20);
+            // 预热翻译连接，之后每 90 秒保活一次（安静的对局里连接不会因空闲断开）
+            _warmTimer = new Timer(_ => _ = _services.WarmUpAsync(), null, 0, 90_000);
             Running = true;
             Log.Info($"已启动。延迟记录：{_csv.FilePath}");
         }
@@ -343,6 +346,8 @@ public sealed class Engine : IDisposable
         Running = false;
         _duckTimer?.Dispose();
         _duckTimer = null;
+        _warmTimer?.Dispose();
+        _warmTimer = null;
         try { Send?.Cancel("停止"); } catch { }
         try { Receive?.Cancel("停止"); } catch { }
         foreach (var d in Enumerable.Reverse(_disposables))
