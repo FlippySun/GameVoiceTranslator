@@ -12,9 +12,8 @@ public sealed class ChannelOptions
     public Direction Direction { get; init; }
     public string? AsrLanguageHint { get; init; }
     public string? AsrContext { get; init; }
-    public string Voice { get; init; } = "";
-    public double TtsRate { get; init; } = 1.0;
-    public string? TtsLanguageHint { get; init; }
+    /// <summary>可在运行中替换（下一句生效）。</summary>
+    public TtsVoice Tts { get; set; } = new("", "", 1.0, null, null);
     public int LeadInMs { get; init; }
     public float LeadInLevel { get; init; } = 0.01f;
     public bool FollowPan { get; init; }
@@ -49,6 +48,7 @@ public sealed class TranslationChannel
     public int Epoch => Volatile.Read(ref _epoch);
     public ChannelStage Stage => _enabled ? _stage : ChannelStage.Off;
     public bool IsCapturing { get { lock (_lock) return _current != null; } }
+    public ChannelOptions Options => _opt;
     public SpeechQueuePlayer Player => _player;
 
     /// <summary>最近一句成功播放的译音（本地重播用）。</summary>
@@ -179,7 +179,7 @@ public sealed class TranslationChannel
         try
         {
             // 合成连接与识别收尾、翻译并行预热
-            tts = _services.PrepareTts(_opt.Voice, _opt.TtsRate, _opt.TtsLanguageHint);
+            tts = _services.PrepareTts(_opt.Tts);
 
             var asr = u.Asr ?? throw new InvalidOperationException("没有识别会话");
             string source;
@@ -205,7 +205,7 @@ public sealed class TranslationChannel
             }
             if (_opt.SkipIfAlreadyTarget && IsAlreadyTarget(source))
             {
-                Emit(u.Id, SubtitleKind.Info, "已是目标语言，不播报");
+                Emit(u.Id, SubtitleKind.Info, _opt.Direction == Direction.EnToZh ? "对方说的是中文，不播报" : "已是英文，不翻译");
                 Drop(slot, rec, "already-target");
                 return;
             }

@@ -110,9 +110,7 @@ public sealed class Engine : IDisposable
             Direction = Direction.ZhToEn,
             AsrLanguageHint = c.AsrLanguageHint,
             AsrContext = _glossary.AsrContextFor(Direction.ZhToEn),
-            Voice = c.Voice,
-            TtsRate = c.TtsRate,
-            TtsLanguageHint = c.TtsLanguageHint,
+            Tts = c.ToTts(_cfg.DashScope.TtsModel),
             LeadInMs = c.LeadInMs,
             LeadInLevel = c.LeadInLevel,
         }, _services, player, _usage) { Enabled = c.Enabled };
@@ -166,9 +164,7 @@ public sealed class Engine : IDisposable
             Direction = Direction.EnToZh,
             AsrLanguageHint = c.AsrLanguageHint,
             AsrContext = _glossary.AsrContextFor(Direction.EnToZh),
-            Voice = c.Voice,
-            TtsRate = c.TtsRate,
-            TtsLanguageHint = c.TtsLanguageHint,
+            Tts = c.ToTts(_cfg.DashScope.TtsModel),
             FollowPan = c.FollowSourcePan,
             SkipIfAlreadyTarget = true,
         }, _services, player, _usage) { Enabled = c.Enabled };
@@ -279,6 +275,13 @@ public sealed class Engine : IDisposable
         foreach (var chunk in last.Value.Audio.ToList()) Receive.Player.Append(slot, chunk);
         Receive.Player.Complete(slot);
         Subtitle?.Invoke(new SubtitleEvent("接收", -1, SubtitleKind.Info, "重播：" + last.Value.Text, DateTime.Now));
+    }
+
+    /// <summary>音色、风格、语速改动后调用，下一句开始生效。</summary>
+    public void ApplyVoiceSettings()
+    {
+        if (Send != null) Send.Options.Tts = _cfg.Send.ToTts(_cfg.DashScope.TtsModel);
+        if (Receive != null) Receive.Options.Tts = _cfg.Receive.ToTts(_cfg.DashScope.TtsModel);
     }
 
     public void SetListenMode(ReceiveListenMode mode)

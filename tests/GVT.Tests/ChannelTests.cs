@@ -59,7 +59,7 @@ public class ChannelTests
             Asrs.Add(a);
             return a;
         }
-        public ITtsSession PrepareTts(string v, double r, string? h) => new FakeTts(TtsValues.Dequeue(), 3);
+        public ITtsSession PrepareTts(GVT.Core.Config.TtsVoice v) => new FakeTts(TtsValues.Dequeue(), 3);
     }
 
     private static (TranslationChannel ch, SpeechQueuePlayer player, FakeServices svc, List<LatencyRecord> done) Make(

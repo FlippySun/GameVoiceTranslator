@@ -33,7 +33,7 @@ public interface ITranslator
 public interface ISpeechServices
 {
     IAsrSession StartAsr(string? languageHint, string? contextText);
-    ITtsSession PrepareTts(string voice, double rate, string? languageHint);
+    ITtsSession PrepareTts(TtsVoice voice);
     ITranslator Translator { get; }
     int TtsSampleRate { get; }
     /// <summary>预先建立 HTTPS 连接，避免第一句多等 TLS 握手。</summary>
@@ -58,8 +58,7 @@ public sealed class DashScopeServices : ISpeechServices
     public IAsrSession StartAsr(string? languageHint, string? contextText)
         => FunAsrSession.Start(_cfg, _apiKey, languageHint, contextText);
 
-    public ITtsSession PrepareTts(string voice, double rate, string? languageHint)
-        => CosyVoiceSession.Prepare(_cfg, _apiKey, voice, rate, languageHint);
+    public ITtsSession PrepareTts(TtsVoice voice) => CosyVoiceSession.Prepare(_cfg, _apiKey, voice);
 
     public Task WarmUpAsync() => ((QwenTranslator)Translator).WarmUpAsync();
 }

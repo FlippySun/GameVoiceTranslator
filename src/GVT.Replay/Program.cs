@@ -84,6 +84,30 @@ try
             engine.Stop();
             return 0;
         }
+        case "tts-test" when args.Length > 1:
+        {
+            // 用指定音色和风格合成一句，测首包延迟并保存 WAV
+            var key = SecretStore.GetApiKey()!;
+            var vid = args[1];
+            var style = Enum.Parse<VoiceStyle>(Opt("--style", "Casual"), true);
+            var lang = VoiceCatalog.Find(vid)?.Language ?? "en";
+            var text = Opt("--text", lang == "en" ? "Yo, two on the left, second floor. Don't push yet, wait for me." : "左边二楼有两个人，先别冲，等我一下。");
+            var v = VoiceCatalog.Resolve(vid, 1.0, style, "", cfg.DashScope.TtsModel, lang);
+            var sw = Stopwatch.StartNew();
+            long first = -1; var all = new List<float>();
+            await using (var tts = CosyVoiceSession.Prepare(cfg.DashScope, key, v))
+            {
+                await Task.Delay(300); // 模拟预热（真实链路里与翻译并行）
+                sw.Restart();
+                var chars = await tts.SpeakAsync(text, s => { if (first < 0) first = sw.ElapsedMilliseconds; all.AddRange(s); }, CancellationToken.None);
+                Directory.CreateDirectory("samples/voices");
+                var path = Path.Combine("samples/voices", $"{vid}-{style}.wav");
+                using var w = new WaveFileWriter(path, new WaveFormat(cfg.DashScope.TtsSampleRate, 16, 1));
+                w.Write(PcmConvert.FloatToPcm16(all.ToArray()));
+                Console.WriteLine($"{vid} {style} ({v.Model})：首包 {first} ms，时长 {all.Count / (double)cfg.DashScope.TtsSampleRate:F1}s，计费 {chars} 字符 → {path}");
+            }
+            return 0;
+        }
         case "probe":
             return await Probe();
         case "sessions" when args.Length > 1:
@@ -196,7 +220,8 @@ async Task<int> RunSynth(string corpusPath, string outDir, string voice)
     {
         i++;
         var samples = new List<float>();
-        await using var tts = svc.PrepareTts(voice, 1.0, voice.Contains("loong") ? "en" : "zh");
+        var vi = VoiceCatalog.Find(voice);
+        await using var tts = svc.PrepareTts(VoiceCatalog.Resolve(voice, 1.0, VoiceStyle.Standard, "", cfg.DashScope.TtsModel, vi?.Language ?? (voice.Contains("loong") ? "en" : "zh")));
         await tts.SpeakAsync(text, samples.AddRange, CancellationToken.None);
         // 前后各留 0.3 秒静音，转成 16 kHz 单声道
         var dm = new MonoDownmixer(tts.SampleRate, 1);
@@ -224,9 +249,7 @@ async Task<int> RunPipeline(string wavDir, bool fast)
         Direction = direction,
         AsrLanguageHint = isSend ? cfg.Send.AsrLanguageHint : cfg.Receive.AsrLanguageHint,
         AsrContext = glossary.AsrContextFor(direction),
-        Voice = isSend ? cfg.Send.Voice : cfg.Receive.Voice,
-        TtsRate = isSend ? cfg.Send.TtsRate : cfg.Receive.TtsRate,
-        TtsLanguageHint = isSend ? cfg.Send.TtsLanguageHint : cfg.Receive.TtsLanguageHint,
+        Tts = isSend ? cfg.Send.ToTts(cfg.DashScope.TtsModel) : cfg.Receive.ToTts(cfg.DashScope.TtsModel),
         SkipIfAlreadyTarget = !isSend,
     }, svc, player, usage);
 
@@ -314,7 +337,7 @@ async Task<int> Probe()
         try
         {
             int bytes = 0;
-            await using var tts = CosyVoiceSession.Prepare(dc, key, cfg.Send.Voice, 1.0, "en");
+            await using var tts = CosyVoiceSession.Prepare(dc, key, cfg.Send.ToTts(dc.TtsModel));
             await tts.SpeakAsync("Two on the left, second floor. Don't shoot.", s => bytes += s.Length, CancellationToken.None);
             Console.WriteLine($"✓ 合成 {u}  {sw.ElapsedMilliseconds}ms  {bytes / (double)dc.TtsSampleRate:F1}s 音频");
             sw.Restart();

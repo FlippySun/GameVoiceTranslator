@@ -30,14 +30,14 @@ public sealed class CosyVoiceSession : ITtsSession
         _apiKey = apiKey;
     }
 
-    public static CosyVoiceSession Prepare(DashScopeConfig cfg, string apiKey, string voice, double rate, string? languageHint)
+    public static CosyVoiceSession Prepare(DashScopeConfig cfg, string apiKey, TtsVoice voice)
     {
         var s = new CosyVoiceSession(cfg, apiKey);
-        s._connect = Task.Run(() => s.ConnectAsync(voice, rate, languageHint));
+        s._connect = Task.Run(() => s.ConnectAsync(voice));
         return s;
     }
 
-    private async Task ConnectAsync(string voice, double rate, string? languageHint)
+    private async Task ConnectAsync(TtsVoice v)
     {
         try
         {
@@ -55,14 +55,15 @@ public sealed class CosyVoiceSession : ITtsSession
             var parameters = new Dictionary<string, object>
             {
                 ["text_type"] = "PlainText",
-                ["voice"] = voice,
+                ["voice"] = v.Voice,
                 ["format"] = "pcm",
                 ["sample_rate"] = _cfg.TtsSampleRate,
                 ["volume"] = 50,
-                ["rate"] = Math.Clamp(rate, 0.5, 2.0),
+                ["rate"] = Math.Clamp(v.Rate, 0.5, 2.0),
                 ["pitch"] = 1.0,
             };
-            if (!string.IsNullOrWhiteSpace(languageHint)) parameters["language_hints"] = new[] { languageHint };
+            if (!string.IsNullOrWhiteSpace(v.LanguageHint)) parameters["language_hints"] = new[] { v.LanguageHint };
+            if (!string.IsNullOrWhiteSpace(v.Instruction)) parameters["instruction"] = v.Instruction;
 
             await _socket.SendJsonAsync(new
             {
@@ -72,7 +73,7 @@ public sealed class CosyVoiceSession : ITtsSession
                     task_group = "audio",
                     task = "tts",
                     function = "SpeechSynthesizer",
-                    model = _cfg.TtsModel,
+                    model = v.Model,
                     parameters,
                     input = new { },
                 },

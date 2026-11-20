@@ -73,7 +73,8 @@ public sealed class DashScopeConfig
     public string Region { get; set; } = "cn-beijing";
 
     public string AsrModel { get; set; } = "fun-asr-realtime";
-    public string TtsModel { get; set; } = "cosyvoice-v3-flash";
+    /// <summary>音色不在内置列表时使用的合成模型。</summary>
+    public string TtsModel { get; set; } = "qwen-audio-3.1-tts-flash";
     public int TtsSampleRate { get; set; } = 48000;
 
     /// <summary>llm = 通用模型 + 规则提示词（默认，实测改口和主语更准）；mt = qwen-mt 专用翻译模型。</summary>
@@ -118,9 +119,12 @@ public sealed class SendConfig
     public string OutputDevice { get; set; } = "CABLE Input (VB-Audio Virtual Cable)";
     public GateMode Gate { get; set; } = GateMode.PushToTalk;
     public string AsrLanguageHint { get; set; } = "zh";
-    public string Voice { get; set; } = "loongandy_v3";
-    public string TtsLanguageHint { get; set; } = "en";
-    public double TtsRate { get; set; } = 1.1;
+    public string Voice { get; set; } = "Andy_v3.1";
+    public VoiceStyle Style { get; set; } = VoiceStyle.Casual;
+    /// <summary>自定义说话风格（自然语言），填写后覆盖 Style。</summary>
+    public string CustomInstruction { get; set; } = "";
+    public double TtsRate { get; set; } = 1.05;
+    public TtsVoice ToTts(string fallbackModel) => VoiceCatalog.Resolve(Voice, TtsRate, Style, CustomInstruction, fallbackModel, "en");
     public float OutputVolume { get; set; } = 1.0f;
     /// <summary>按键开始前保留的音频（毫秒），防止吞掉第一个字。</summary>
     public int PreRollMs { get; set; } = 200;
@@ -135,9 +139,11 @@ public sealed class ReceiveConfig
     public string SourceDevice { get; set; } = "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)";
     public string HeadphoneDevice { get; set; } = "";
     public string AsrLanguageHint { get; set; } = "en";
-    public string Voice { get; set; } = "longanyang";
-    public string TtsLanguageHint { get; set; } = "zh";
+    public string Voice { get; set; } = "longanyang_v3.1";
+    public VoiceStyle Style { get; set; } = VoiceStyle.Casual;
+    public string CustomInstruction { get; set; } = "";
     public double TtsRate { get; set; } = 1.15;
+    public TtsVoice ToTts(string fallbackModel) => VoiceCatalog.Resolve(Voice, TtsRate, Style, CustomInstruction, fallbackModel, "zh");
     public float TranslationVolume { get; set; } = 1.0f;
     public ReceiveListenMode ListenMode { get; set; } = ReceiveListenMode.TranslationFirst;
 
@@ -162,6 +168,8 @@ public sealed class HotkeyConfig
     public string HoldOriginal { get; set; } = "F9";
     public string ReplayLast { get; set; } = "F10";
     public string ToggleReceive { get; set; } = "F11";
+    /// <summary>切换浮窗编辑模式（可拖动、调整大小）。</summary>
+    public string OverlayEdit { get; set; } = "F6";
 }
 
 public sealed class VadConfig
@@ -198,5 +206,9 @@ public sealed class OverlayConfig
     public double Width { get; set; } = 560;
     public double FontSize { get; set; } = 18;
     public double Opacity { get; set; } = 0.85;
-    public int MaxLines { get; set; } = 5;
+    public int MaxLines { get; set; } = 4;
+    public double Height { get; set; } = 220;
+    /// <summary>字幕在浮窗里停留多久后淡出（秒）。</summary>
+    public double HoldSeconds { get; set; } = 25;
+    public bool ShowOriginal { get; set; } = true;
 }

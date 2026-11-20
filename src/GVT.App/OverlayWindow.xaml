@@ -1,21 +1,118 @@
 <Window x:Class="GVT.App.OverlayWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="GVT Overlay"
+        Title="游戏双译 · 浮窗"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False"
-        ResizeMode="NoResize" SizeToContent="Height">
-    <Border x:Name="Panel" CornerRadius="8" Padding="10,8" Background="#B0101418">
-        <StackPanel>
-            <TextBlock x:Name="StatusLine" Foreground="#FFB8C4CC" FontSize="13" Margin="0,0,0,4" TextWrapping="Wrap"/>
-            <ItemsControl x:Name="Lines">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" FontSize="{Binding FontSize}"
-                                   TextWrapping="Wrap" Margin="0,1"/>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </StackPanel>
-    </Border>
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        ResizeMode="NoResize" FontFamily="{StaticResource F.Ui}" UseLayoutRounding="True"
+        MinWidth="260" MinHeight="90">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolVis"/>
+        <DataTemplate x:Key="LineTemplate">
+            <Grid x:Name="Root" Margin="0,0,0,8" Opacity="{Binding Opacity}">
+                <Grid.RenderTransform><TranslateTransform/></Grid.RenderTransform>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border x:Name="Bar" Width="3" CornerRadius="2" Margin="0,3,10,3" Background="{StaticResource B.MateGradient}"/>
+                <StackPanel Grid.Column="1">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,1">
+                        <Border x:Name="Tag" CornerRadius="5" Padding="6,1" Background="#33FFB547" VerticalAlignment="Center">
+                            <TextBlock x:Name="TagText" Text="队友" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource B.Mate}"/>
+                        </Border>
+                        <TextBlock x:Name="StateLine" Text="{Binding StateText}" FontSize="11" Foreground="#99FFFFFF" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock x:Name="Primary" Text="{Binding Primary}" Foreground="White" TextWrapping="Wrap"
+                               FontSize="{Binding DataContext.FontSize, RelativeSource={RelativeSource AncestorType=Window}}" FontWeight="Medium">
+                        <TextBlock.Effect><DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.8" Color="Black"/></TextBlock.Effect>
+                    </TextBlock>
+                    <TextBlock x:Name="Secondary" Text="{Binding Secondary}" Foreground="#B3FFFFFF" TextWrapping="Wrap"
+                               FontSize="{Binding DataContext.SmallFontSize, RelativeSource={RelativeSource AncestorType=Window}}"
+                               Visibility="{Binding HasSecondary, Converter={StaticResource BoolVis}}"/>
+                </StackPanel>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsMe}" Value="True">
+                    <Setter TargetName="Bar" Property="Background" Value="{StaticResource B.MeGradient}"/>
+                    <Setter TargetName="Tag" Property="Background" Value="#3338C6F4"/>
+                    <Setter TargetName="TagText" Property="Text" Value="我"/>
+                    <Setter TargetName="TagText" Property="Foreground" Value="{StaticResource B.Me}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSystem}" Value="True">
+                    <Setter TargetName="Bar" Property="Background" Value="#66FFFFFF"/>
+                    <Setter TargetName="Tag" Property="Background" Value="#22FFFFFF"/>
+                    <Setter TargetName="TagText" Property="Text" Value="提示"/>
+                    <Setter TargetName="TagText" Property="Foreground" Value="#CCFFFFFF"/>
+                    <Setter TargetName="Primary" Property="FontSize" Value="13"/>
+                    <Setter TargetName="StateLine" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsError}" Value="True">
+                    <Setter TargetName="Bar" Property="Background" Value="{StaticResource B.Danger}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsFaded}" Value="True">
+                    <Setter TargetName="Primary" Property="Foreground" Value="#99FFFFFF"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.ShowOriginal, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                    <Setter TargetName="Secondary" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-12" To="0" Duration="0:0:0.25">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Border x:Name="Panel" CornerRadius="14" Padding="14,10,14,4" Background="#0C0D11"
+                BorderBrush="#33FFFFFF" BorderThickness="1">
+            <DockPanel>
+                <!-- 状态栏：两个方向的小灯 -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                    <Ellipse x:Name="MeDot" Style="{StaticResource PulseDot}" Width="7" Height="7" Fill="#55FFFFFF" Tag="False"/>
+                    <TextBlock x:Name="MeState" Text="发送 关" FontSize="11" Foreground="#AAFFFFFF" Margin="6,0,14,0"/>
+                    <Ellipse x:Name="MateDot" Width="7" Height="7" Fill="#55FFFFFF"/>
+                    <TextBlock x:Name="MateState" Text="播报 关" FontSize="11" Foreground="#AAFFFFFF" Margin="6,0,0,0"/>
+                </StackPanel>
+                <!-- 新消息在底部 -->
+                <ScrollViewer x:Name="LinesScroll" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
+                              IsHitTestVisible="False" Focusable="False" ScrollChanged="Lines_ScrollChanged">
+                    <Grid MinHeight="{Binding ViewportHeight, ElementName=LinesScroll}">
+                        <ItemsControl x:Name="Lines" ItemTemplate="{StaticResource LineTemplate}" VerticalAlignment="Bottom"/>
+                    </Grid>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- 编辑模式外框与提示 -->
+        <Border x:Name="EditFrame" CornerRadius="14" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False">
+            <Border.BorderBrush>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#38C6F4" Offset="0"/>
+                    <GradientStop Color="#B06CFF" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.BorderBrush>
+        </Border>
+        <Border x:Name="EditHint" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-2,0,0"
+                Background="#E6232731" CornerRadius="0,0,10,10" Padding="12,5" IsHitTestVisible="False">
+            <TextBlock x:Name="EditHintText" FontSize="11.5" Foreground="White"/>
+        </Border>
+        <!-- 右下角缩放手柄 -->
+        <Thumb x:Name="Grip" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,3,3"
+               Cursor="SizeNWSE" Visibility="Collapsed" DragDelta="Grip_DragDelta">
+            <Thumb.Template>
+                <ControlTemplate TargetType="Thumb">
+                    <Grid Background="Transparent">
+                        <Path Data="M 16,4 L 4,16 M 16,9 L 9,16 M 16,14 L 14,16" Stroke="#CCFFFFFF" StrokeThickness="1.5"/>
+                    </Grid>
+                </ControlTemplate>
+            </Thumb.Template>
+        </Thumb>
+    </Grid>
 </Window>
