@@ -8,6 +8,15 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>GameVoiceTranslator</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- 显示在文件属性、任务管理器、任务栏分组里的名称 -->
+    <Product>游戏双译</Product>
+    <AssemblyTitle>游戏双译</AssemblyTitle>
+    <Description>游戏内双向语音翻译：你说中文队友听英文，队友说英文你听中文</Description>
+    <Company>游戏双译</Company>
+    <Copyright>© 2026</Copyright>
+    <Version>0.3.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\app.png" />
     <None Include="glossary.default.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\models\silero_vad.onnx" Link="models\silero_vad.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\models\silero_vad.onnx')" />
   </ItemGroup>

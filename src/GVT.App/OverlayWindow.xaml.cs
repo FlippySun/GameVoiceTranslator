@@ -43,6 +43,8 @@ public partial class OverlayWindow : Window
         };
         MouseLeftButtonDown += (_, e) => { if (EditMode && e.ButtonState == MouseButtonState.Pressed) DragMove(); };
         MouseWheel += OnWheel;
+        LocationChanged += (_, _) => { if (EditMode) _toolbar?.PlaceNear(this); };
+        SizeChanged += (_, _) => { if (EditMode) _toolbar?.PlaceNear(this); };
         _fadeTimer.Tick += (_, _) => FadeOld();
         _fadeTimer.Start();
         ApplySettings();
@@ -55,9 +57,27 @@ public partial class OverlayWindow : Window
         Top = o.Top;
         Width = Math.Max(MinWidth, o.Width);
         Height = Math.Max(MinHeight, o.Height);
+        ApplyStyle();
+    }
+
+    /// <summary>只应用样式（字号、颜色、背景），不动位置和大小——编辑中还没保存的拖动结果不会被打回。</summary>
+    public void ApplyStyle()
+    {
+        var o = _cfg.Overlay;
         _view.FontSize = o.FontSize;
         _view.ShowOriginal = o.ShowOriginal;
+        _view.MeBrush = BrushOf(o.MeTextColor, "#A6E6FF");
+        _view.MateBrush = BrushOf(o.MateTextColor, "#FFE2A8");
+        _view.SecondaryBrush = BrushOf(o.OriginalTextColor, "#B8BEC9");
         Panel.Background = new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(o.Opacity, 0, 1) * 255), 0x0C, 0x0D, 0x11));
+        // 背景很透明时加强描边阴影，保证文字在游戏画面上可读
+        Panel.BorderBrush = new SolidColorBrush(Color.FromArgb((byte)(o.Opacity < 0.3 ? 0 : 0x33), 255, 255, 255));
+    }
+
+    private static Brush BrushOf(string hex, string fallback)
+    {
+        try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); }
+        catch { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(fallback)); }
     }
 
     /// <summary>内容超出时始终贴底显示最新的句子，最旧的从顶部被挤掉。</summary>
@@ -80,9 +100,19 @@ public partial class OverlayWindow : Window
         if (on)
         {
             Activate();
+            if (_toolbar == null)
+            {
+                _toolbar = new OverlayToolbar(_cfg) { Owner = this };
+                _toolbar.StyleChanged += () => { ApplyStyle(); StyleChanged?.Invoke(); };
+                _toolbar.DoneRequested += () => SetEditMode(false);
+            }
+            _toolbar.LoadFromConfig();
+            _toolbar.Show();
+            _toolbar.PlaceNear(this);
         }
         else
         {
+            _toolbar?.Hide();
             _cfg.Overlay.Left = Math.Round(Left);
             _cfg.Overlay.Top = Math.Round(Top);
             _cfg.Overlay.Width = Math.Round(Width);
@@ -90,6 +120,12 @@ public partial class OverlayWindow : Window
         }
         EditModeChanged?.Invoke(on);
     }
+
+    private OverlayToolbar? _toolbar;
+    public Window? Toolbar => _toolbar;
+
+    /// <summary>编辑工具栏里改了样式（主界面设置页据此同步）。</summary>
+    public event Action? StyleChanged;
 
     private void Grip_DragDelta(object sender, DragDeltaEventArgs e)
     {
@@ -103,7 +139,8 @@ public partial class OverlayWindow : Window
         _cfg.Overlay.FontSize = Math.Clamp(_cfg.Overlay.FontSize + (e.Delta > 0 ? 1 : -1), 12, 40);
         _view.FontSize = _cfg.Overlay.FontSize;
         EditHintText.Text = $"拖动移动 · 右下角改大小 · 滚轮改字号（{_cfg.Overlay.FontSize:F0}） · 再按 {_cfg.Hotkeys.OverlayEdit} 锁定";
-        (Owner as MainWindow ?? Application.Current.MainWindow as MainWindow)?.SyncOverlayFont();
+        _toolbar?.LoadFromConfig();
+        StyleChanged?.Invoke();
     }
 
     private void ApplyClickThrough(bool passThrough)
@@ -154,6 +191,10 @@ public partial class OverlayWindow : Window
         public double FontSize { get => _fontSize; set { _fontSize = value; Raise(nameof(FontSize)); Raise(nameof(SmallFontSize)); } }
         public double SmallFontSize => Math.Max(11, Math.Round(_fontSize * 0.68));
         public bool ShowOriginal { get => _showOriginal; set { _showOriginal = value; Raise(nameof(ShowOriginal)); } }
+        private Brush _me = Brushes.White, _mate = Brushes.White, _secondary = Brushes.LightGray;
+        public Brush MeBrush { get => _me; set { _me = value; Raise(nameof(MeBrush)); } }
+        public Brush MateBrush { get => _mate; set { _mate = value; Raise(nameof(MateBrush)); } }
+        public Brush SecondaryBrush { get => _secondary; set { _secondary = value; Raise(nameof(SecondaryBrush)); } }
         public event PropertyChangedEventHandler? PropertyChanged;
         private void Raise(string n) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
     }

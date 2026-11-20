@@ -211,4 +211,10 @@ public sealed class OverlayConfig
     /// <summary>字幕在浮窗里停留多久后淡出（秒）。</summary>
     public double HoldSeconds { get; set; } = 25;
     public bool ShowOriginal { get; set; } = true;
+    /// <summary>“我说的”译文颜色（队友听到的英文）。</summary>
+    public string MeTextColor { get; set; } = "#A6E6FF";
+    /// <summary>“队友说的”译文颜色（我听到的中文）。</summary>
+    public string MateTextColor { get; set; } = "#FFE2A8";
+    /// <summary>原文（小字）颜色。</summary>
+    public string OriginalTextColor { get; set; } = "#B8BEC9";
 }

@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         _cfg = cfg;
         _timeline.RecentMax = cfg.Overlay.MaxLines;
         _overlay = new OverlayWindow(cfg, _timeline);
+        _overlay.StyleChanged += () => Dispatcher.BeginInvoke(SyncOverlayStyle);
         _overlay.EditModeChanged += editing => Dispatcher.BeginInvoke(() =>
         {
             OverlayEditBtn.Content = editing ? "完成并锁定" : "调整位置和大小";
@@ -109,7 +110,7 @@ public partial class MainWindow : Window
         if (args.Contains("--demo")) FillDemo();
         if (args.Contains("--autostart")) StartEngine();
         var si = Array.IndexOf(args, "--shot");
-        if (si >= 0 && si + 1 < args.Length) _ = ShootAllAsync(args[si + 1]);
+        if (si >= 0 && si + 1 < args.Length) _ = ShootAllAsync(args[si + 1]).ContinueWith(t => { if (t.Exception != null) { File.WriteAllText(System.IO.Path.Combine(args[si + 1], "error.txt"), t.Exception.ToString()); Dispatcher.Invoke(Close); } });
     }
 
     /// <summary>调试用：把每个页面和浮窗渲染成 PNG（只渲染本程序自己的界面，不截屏），然后退出。</summary>
@@ -125,6 +126,7 @@ public partial class MainWindow : Window
         }
         if (args_EditOverlay()) { _overlay.SetEditMode(true); await Task.Delay(400); }
         SavePng(_overlay, System.IO.Path.Combine(dir, "float.png"));
+        if (_overlay.Toolbar is { IsVisible: true } tb) SavePng(tb, System.IO.Path.Combine(dir, "toolbar.png"));
         Close();
     }
 
@@ -514,7 +516,7 @@ public partial class MainWindow : Window
         OvLines.Value = o.MaxLines;
         OvHold.Value = o.HoldSeconds;
         OvShowOriginal.IsChecked = o.ShowOriginal;
-        OverlayEditHint.Text = $"按 {KeyName(_cfg.Hotkeys.OverlayEdit)} 进入编辑：拖动移动、拖右下角改大小、滚轮改字号；再按一次锁定。";
+        OverlayEditHint.Text = $"按 {KeyName(_cfg.Hotkeys.OverlayEdit)} 进入编辑：拖动移动、拖右下角改大小，旁边的工具栏可调背景透明度、字号和各类文字颜色；再按一次锁定。";
         UpdateOverlayTexts();
     }
 
@@ -538,7 +540,7 @@ public partial class MainWindow : Window
         o.HoldSeconds = OvHold.Value;
         o.ShowOriginal = OvShowOriginal.IsChecked == true;
         _timeline.RecentMax = o.MaxLines;
-        _overlay.ApplySettings();
+        _overlay.ApplyStyle();
         _cfg.Save();
     }
 
@@ -555,11 +557,14 @@ public partial class MainWindow : Window
         _overlay.ToggleEditMode();
     }
 
-    /// <summary>浮窗编辑时用滚轮改了字号，同步到设置页。</summary>
-    public void SyncOverlayFont()
+    /// <summary>浮窗编辑工具栏 / 滚轮改了样式，同步到设置页并保存。</summary>
+    public void SyncOverlayStyle()
     {
         _loading = true;
         OvFont.Value = _cfg.Overlay.FontSize;
+        OvOpacity.Value = _cfg.Overlay.Opacity;
+        OvShowOriginal.IsChecked = _cfg.Overlay.ShowOriginal;
+        _cfg.Save();
         UpdateOverlayTexts();
         _loading = false;
     }
@@ -578,7 +583,7 @@ public partial class MainWindow : Window
         Row(nameof(HotkeyConfig.HoldOriginal), "按住听原声", "暂停中文播报，队友原声恢复正常音量");
         Row(nameof(HotkeyConfig.ReplayLast), "重播上一句中文", "只在自己耳机里重播，不会发给队友");
         Row(nameof(HotkeyConfig.ToggleReceive), "停止 / 恢复中文播报", "原声照常");
-        Row(nameof(HotkeyConfig.OverlayEdit), "编辑浮窗", "进入后可拖动、调整大小，再按一次锁定");
+        Row(nameof(HotkeyConfig.OverlayEdit), "编辑浮窗", "进入后可拖动、调整大小，并调背景透明度、字号、文字颜色；再按一次锁定");
         foreach (var r in _hotkeyRows) r.Display = KeyName(GetHotkey(r.Key));
         HotkeyList.ItemsSource = null;
         HotkeyList.ItemsSource = _hotkeyRows;
