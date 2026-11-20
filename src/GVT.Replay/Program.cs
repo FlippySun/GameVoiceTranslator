@@ -28,6 +28,9 @@ string Opt(string name, string def)
 bool Flag(string name) => args.Contains(name);
 
 var cfg = AppConfig.LoadOrCreate();
+VoiceCatalog.LoadCustom(cfg);
+var sendVoiceOpt = Array.IndexOf(args, "--send-voice") is var svi and >= 0 && svi + 1 < args.Length ? args[svi + 1] : null;
+if (sendVoiceOpt != null) cfg.Send.Voice = sendVoiceOpt;
 var modelOpt = Opt("--model", "");
 if (modelOpt != "") cfg.DashScope.LlmModel = modelOpt;
 var translatorOpt = Opt("--translator", "");
@@ -108,6 +111,8 @@ try
             }
             return 0;
         }
+        case "voice-lab":
+            return await VoiceLab(Opt("--out", "voice-lab"));
         case "probe":
             return await Probe();
         case "sessions" when args.Length > 1:
@@ -413,3 +418,90 @@ static void PrintUsage() => Console.WriteLine("""
   GVT.Replay synth <corpus.tsv> --out <dir> [--voice longanyang]
   GVT.Replay run   <wav目录> [--dir zh2en|en2zh] [--fast]
 """);
+
+// 英文音色试听包：多个引擎 / 音色 / 设计音色读同样三句开黑口语，记录首包延迟，输出 WAV 供人耳对比
+async Task<int> VoiceLab(string outDir)
+{
+    var key = SecretStore.GetApiKey() ?? throw new InvalidOperationException("没有 API Key");
+    Directory.CreateDirectory(outDir);
+    string[] lines =
+    {
+        "Yo, two on the left, second floor. Don't push yet, wait for me.",
+        "My bad, I'm down. Can you pick me up?",
+        "Nice, we're good. Let's exfil together.",
+    };
+    var dc = cfg.DashScope;
+    var custom = new VoiceCustomization(dc, key);
+    var report = new StringBuilder();
+    int n = 0;
+
+    async Task Render(string label, TtsVoice v)
+    {
+        n++;
+        var all = new List<float>();
+        var firsts = new List<long>();
+        try
+        {
+            foreach (var text in lines)
+            {
+                ITtsSession tts = Qwen3TtsSession.Handles(v.Model) ? new Qwen3TtsSession(dc, key, v) : CosyVoiceSession.Prepare(dc, key, v);
+                await using (tts)
+                {
+                    if (tts is CosyVoiceSession) await Task.Delay(300); // 真实链路里合成连接已预热
+                    var sw = Stopwatch.StartNew();
+                    long first = -1;
+                    await tts.SpeakAsync(text, s => { if (first < 0) first = sw.ElapsedMilliseconds; all.AddRange(s); }, CancellationToken.None);
+                    firsts.Add(first);
+                }
+                all.AddRange(new float[dc.TtsSampleRate / 2]); // 句间 0.5 秒
+            }
+            var name = $"{n:D2} {label}.wav";
+            using (var w = new WaveFileWriter(Path.Combine(outDir, name), new WaveFormat(dc.TtsSampleRate, 16, 1)))
+                w.Write(PcmConvert.FloatToPcm16(all.ToArray()));
+            var line = $"{name}  首包 {string.Join("/", firsts)} ms";
+            Console.WriteLine(line);
+            report.AppendLine(line);
+        }
+        catch (Exception ex)
+        {
+            var line = $"{n:D2} {label}：失败 {ex.Message}";
+            Console.WriteLine(line);
+            report.AppendLine(line);
+        }
+    }
+
+    // 1) 现在用的（对照组）
+    await Render("现用 Qwen-Audio-flash Andy 开黑口语", VoiceCatalog.Resolve("Andy_v3.1", 1.0, VoiceStyle.Casual, "", dc.TtsModel, "en"));
+    // 2) Qwen-Audio plus 高配
+    foreach (var v in new[] { "Andy_v3.1", "Brian_v3.1" })
+        await Render($"Qwen-Audio-plus {v[..v.IndexOf('_')]} 开黑口语", VoiceCatalog.Resolve(v, 1.0, VoiceStyle.Casual, "", dc.TtsModel, "en") with { Model = "qwen-audio-3.1-tts-plus" });
+    // 3) Qwen3-TTS 聊天型音色
+    foreach (var (v, desc) in new[] { ("Ryan", "戏感真实"), ("Aiden", "美语大男孩"), ("Ethan", "阳光活力"), ("Kai", "温和"), ("Moon", "率性帅气"), ("Vincent", "沙哑烟嗓") })
+        await Render($"Qwen3-TTS {v}（{desc}）", new TtsVoice("qwen3-tts-flash", v, 1.0, "en", null));
+    // 4) 音色设计：用描述生成“美国玩家”声音
+    var designs = new[]
+    {
+        ("gamerm", "设计 美国男玩家·随意沙哑", "二十出头的美国年轻男性，美式英语母语口音，声音略带沙哑，说话随意放松、语速偏快，像在和朋友开黑语音聊天，自然不做作，不是播音员。"),
+        ("streamer", "设计 美国男主播·有活力", "二十五岁左右的美国男性游戏主播，美式英语母语口音，开朗有活力，语速快，语调起伏明显，说话带笑意，非常口语化。"),
+        ("gamerf", "设计 美国女玩家·轻松", "二十多岁的美国年轻女性玩家，美式英语母语口音，声音清亮，语气轻松自然、略带慵懒，语速中等，像朋友之间随口聊天。"),
+    };
+    foreach (var (prefix, label, prompt) in designs)
+    {
+        try
+        {
+            var r = await custom.DesignAsync(prompt, lines[0], prefix, "en", VoiceCatalog.QwenAudio, CancellationToken.None);
+            Console.WriteLine($"已创建设计音色 {r.VoiceId}");
+            report.AppendLine($"设计音色 {label} = {r.VoiceId}");
+            await Render(label, new TtsVoice(VoiceCatalog.QwenAudio, r.VoiceId, 1.0, null, null));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{label}：创建失败 {ex.Message}");
+            report.AppendLine($"{label}：创建失败 {ex.Message}");
+        }
+    }
+    File.WriteAllText(Path.Combine(outDir, "说明.txt"),
+        "每个文件读同样三句：\n" + string.Join("\n", lines) + "\n\n" + report, new UTF8Encoding(true));
+    Console.WriteLine($"完成：{Path.GetFullPath(outDir)}");
+    return 0;
+}

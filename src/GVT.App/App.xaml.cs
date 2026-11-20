@@ -27,6 +27,7 @@ public partial class App : Application
         catch { }
 
         var cfg = AppConfig.LoadOrCreate();
+        VoiceCatalog.LoadCustom(cfg);
         var glossaryPath = cfg.ResolveGlossaryPath();
         var defaultGlossary = Path.Combine(AppContext.BaseDirectory, "glossary.default.json");
         if (!File.Exists(glossaryPath) && File.Exists(defaultGlossary)) File.Copy(defaultGlossary, glossaryPath);

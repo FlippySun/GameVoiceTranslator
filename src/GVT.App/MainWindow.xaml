@@ -531,7 +531,7 @@
                                     </Border>
                                     <StackPanel Margin="12,0,0,0">
                                         <TextBlock Text="队友听到的英文声音" Style="{StaticResource T.H2}"/>
-                                        <TextBlock Text="推荐 Andy / Brian + 开黑口语，更像真人在说话" Style="{StaticResource T.Caption}"/>
+                                        <TextBlock Text="建议先试 Qwen3 的 Ryan / Aiden 和“设计”声音；Qwen3 音色不受下方风格和语速影响" Style="{StaticResource T.Caption}"/>
                                     </StackPanel>
                                 </StackPanel>
                                 <ListBox x:Name="SendVoiceList" Style="{StaticResource VoiceList}" Tag="{StaticResource B.Me}" Margin="0,16,0,8" SelectionChanged="Voice_Changed"/>
@@ -561,6 +561,16 @@
                                 </Grid>
                                 <TextBlock Text="自定义风格（可选，英文描述，会覆盖上面的风格）" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
                                 <TextBox x:Name="SendInstruction" LostFocus="Instruction_LostFocus"/>
+                                <Border Style="{StaticResource Inset}" Margin="0,16,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="用一句话设计新的英文声音" Foreground="{StaticResource B.Text}" FontWeight="Medium"/>
+                                        <TextBlock Text="描述性别、年龄、口音、语速、情绪和说话场景，例如“二十出头的美国男生，嗓音略沙哑，说话随意、语速偏快，像和朋友开黑”。生成约需 10 秒，会自动试听并加入上面的列表。" Style="{StaticResource T.Caption}" Margin="0,4,0,10"/>
+                                        <DockPanel>
+                                            <Button x:Name="DesignBtn" DockPanel.Dock="Right" Style="{StaticResource BtnPrimary}" Content="生成新音色" Margin="10,0,0,0" Click="DesignVoice_Click"/>
+                                            <TextBox x:Name="DesignPrompt"/>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
 

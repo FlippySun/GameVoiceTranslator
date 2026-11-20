@@ -100,6 +100,9 @@ public sealed class QwenTranslator : ITranslator
             .AppendLine("Rules:")
             .AppendLine("- Output ONLY the translation. Never answer questions, never comment, never add tactical advice.")
             .AppendLine("- Keep it short and spoken, like a gamer callout.")
+            .AppendLine(direction == Direction.ZhToEn
+                ? "- Sound like a real American gamer on voice chat: contractions (I'm, don't, gonna, wanna), casual words, no textbook or formal phrasing."
+                : "- 用口语化、自然的中文，像队友之间说话。")
             .AppendLine("- Preserve negations, directions (left/right/front/behind/floors), numbers, who-did-what, tense and conditions exactly.")
             .AppendLine("- If the speaker corrects themselves (pattern: A... no, B / A, wait, B / A 不对 B / A 算了 B), translate ONLY B and drop A entirely. Speech recognition often drops the pause, so 'A no B' is also a self-correction.")
             .AppendLine("- Keep the subject exactly: 'I' vs 'he' vs 'they'. 我破甲了 = my armor is broken (I'm cracked); 他破甲了 = his armor is broken (he's cracked).")

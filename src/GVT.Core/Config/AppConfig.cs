@@ -16,6 +16,8 @@ public sealed class AppConfig
     public VadConfig Vad { get; set; } = new();
     public BudgetConfig Budget { get; set; } = new();
     public OverlayConfig Overlay { get; set; } = new();
+    /// <summary>音色设计 / 声音复刻得到的自定义音色。</summary>
+    public List<CustomVoiceConfig> CustomVoices { get; set; } = new();
 
     /// <summary>词库文件路径；相对路径相对于配置目录。</summary>
     public string GlossaryFile { get; set; } = "glossary.json";
@@ -94,10 +96,23 @@ public sealed class DashScopeConfig
         ? "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
         : $"wss://{WorkspaceId}.{Region}.maas.aliyuncs.com/api-ws/v1/inference";
 
+    /// <summary>DashScope 原生 HTTP 接口前缀（/api/v1），与 OpenAI 兼容地址同域名。</summary>
+    [JsonIgnore]
+    public string ApiBaseUrl => CompatibleBaseUrl.Replace("/compatible-mode/v1", "/api/v1");
+
     [JsonIgnore]
     public string CompatibleBaseUrl => !string.IsNullOrWhiteSpace(CompatibleBaseUrlOverride) ? CompatibleBaseUrlOverride : string.IsNullOrWhiteSpace(WorkspaceId)
         ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
         : $"https://{WorkspaceId}.{Region}.maas.aliyuncs.com/compatible-mode/v1";
+}
+
+public sealed class CustomVoiceConfig
+{
+    public string Id { get; set; } = "";
+    public string Model { get; set; } = "qwen-audio-3.1-tts-flash";
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Language { get; set; } = "en";
 }
 
 public enum TranslatorKind { Mt, Llm }

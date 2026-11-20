@@ -23,9 +23,16 @@ public static class VoiceCatalog
 {
     public const string QwenAudio = "qwen-audio-3.1-tts-flash";
     public const string CosyV3 = "cosyvoice-v3-flash";
+    public const string Qwen3 = "qwen3-tts-flash";
 
     public static readonly IReadOnlyList<VoiceInfo> English = new List<VoiceInfo>
     {
+        new("Ryan", Qwen3, "Ryan", "Qwen3 · 美式男声 · 戏感真实（推荐试听）", "en", false),
+        new("Aiden", Qwen3, "Aiden", "Qwen3 · 美语大男孩", "en", false),
+        new("Ethan", Qwen3, "Ethan", "Qwen3 · 阳光活力男声", "en", false),
+        new("Kai", Qwen3, "Kai", "Qwen3 · 温和男声", "en", false),
+        new("Moon", Qwen3, "Moon", "Qwen3 · 率性帅气男声", "en", false),
+        new("Vincent", Qwen3, "Vincent", "Qwen3 · 沙哑烟嗓男声", "en", false),
         new("Andy_v3.1", QwenAudio, "Andy", "美式男声 · 年轻随和", "en", true),
         new("Brian_v3.1", QwenAudio, "Brian", "美式男声 · 低沉稳重", "en", true),
         new("David_v3.1", QwenAudio, "David", "美式男声 · 成熟", "en", true),
@@ -49,8 +56,20 @@ public static class VoiceCatalog
         new("longanyang", CosyV3, "龙安洋（旧版）", "阳光大男孩 · CosyVoice", "zh", false),
     };
 
+    /// <summary>账号里通过音色设计 / 声音复刻创建的音色（启动时从配置载入）。</summary>
+    public static List<VoiceInfo> Custom { get; } = new();
+
+    public static void LoadCustom(AppConfig cfg)
+    {
+        Custom.Clear();
+        foreach (var c in cfg.CustomVoices.Where(c => !string.IsNullOrWhiteSpace(c.Id)))
+            Custom.Add(new VoiceInfo(c.Id, c.Model, c.Name, c.Description, c.Language, c.Model.StartsWith("qwen-audio", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static IEnumerable<VoiceInfo> EnglishAll => Custom.Where(v => v.Language == "en").Concat(English);
+
     public static VoiceInfo? Find(string id)
-        => English.Concat(Chinese).FirstOrDefault(v => string.Equals(v.Id, id, StringComparison.OrdinalIgnoreCase));
+        => Custom.Concat(English).Concat(Chinese).FirstOrDefault(v => string.Equals(v.Id, id, StringComparison.OrdinalIgnoreCase));
 
     public static string? InstructionFor(VoiceStyle style, string language) => (style, language) switch
     {
@@ -70,8 +89,8 @@ public static class VoiceCatalog
         string? instruction = !styleOk ? null
             : !string.IsNullOrWhiteSpace(customInstruction) ? customInstruction.Trim()
             : InstructionFor(style, language);
-        // qwen-audio 合成普通话或英语时不需要 language_hints；CosyVoice 需要
-        string? hint = model.StartsWith("cosyvoice", StringComparison.OrdinalIgnoreCase) ? language : null;
+        // qwen-audio 合成普通话或英语时不需要 language_hints；CosyVoice 需要；Qwen3-TTS 用它决定 language_type
+        string? hint = model.StartsWith("cosyvoice", StringComparison.OrdinalIgnoreCase) || model.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase) ? language : null;
         return new TtsVoice(model, voiceId, rate, hint, instruction);
     }
 }

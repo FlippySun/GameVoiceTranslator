@@ -58,7 +58,9 @@ public sealed class DashScopeServices : ISpeechServices
     public IAsrSession StartAsr(string? languageHint, string? contextText)
         => FunAsrSession.Start(_cfg, _apiKey, languageHint, contextText);
 
-    public ITtsSession PrepareTts(TtsVoice voice) => CosyVoiceSession.Prepare(_cfg, _apiKey, voice);
+    public ITtsSession PrepareTts(TtsVoice voice) => Qwen3TtsSession.Handles(voice.Model)
+        ? new Qwen3TtsSession(_cfg, _apiKey, voice)
+        : CosyVoiceSession.Prepare(_cfg, _apiKey, voice);
 
     public Task WarmUpAsync() => ((QwenTranslator)Translator).WarmUpAsync();
 }

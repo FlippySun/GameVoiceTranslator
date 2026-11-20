@@ -417,9 +417,9 @@ public partial class MainWindow : Window
 
     private void LoadVoices()
     {
-        SendVoiceList.ItemsSource = VoiceCatalog.English;
+        SendVoiceList.ItemsSource = VoiceCatalog.EnglishAll.ToList();
         RecvVoiceList.ItemsSource = VoiceCatalog.Chinese;
-        SendVoiceList.SelectedItem = VoiceCatalog.English.FirstOrDefault(v => v.Id == _cfg.Send.Voice);
+        SendVoiceList.SelectedItem = VoiceCatalog.EnglishAll.FirstOrDefault(v => v.Id == _cfg.Send.Voice);
         RecvVoiceList.SelectedItem = VoiceCatalog.Chinese.FirstOrDefault(v => v.Id == _cfg.Receive.Voice);
         StyleRadio(_cfg.Send.Style, SendStyleCasual, SendStyleCallout, SendStyleStandard).IsChecked = true;
         StyleRadio(_cfg.Receive.Style, RecvStyleCasual, RecvStyleCallout, RecvStyleStandard).IsChecked = true;
@@ -498,6 +498,48 @@ public partial class MainWindow : Window
         finally
         {
             btn.IsEnabled = true;
+        }
+    }
+
+    private async void DesignVoice_Click(object sender, RoutedEventArgs e)
+    {
+        var prompt = DesignPrompt.Text.Trim();
+        if (prompt.Length < 6) { Toast("先写一句声音描述"); return; }
+        var key = SecretStore.GetApiKey();
+        if (key == null) { Toast("请先保存 API Key"); return; }
+        DesignBtn.IsEnabled = false;
+        DesignBtn.Content = "生成中…";
+        try
+        {
+            var custom = new VoiceCustomization(_cfg.DashScope, key);
+            var prefix = "c" + Guid.NewGuid().ToString("N")[..6];
+            var r = await custom.DesignAsync(prompt, VoicePreview.EnglishSample, prefix, "en", VoiceCatalog.QwenAudio, CancellationToken.None);
+            int n = _cfg.CustomVoices.Count + 1;
+            _cfg.CustomVoices.Insert(0, new CustomVoiceConfig
+            {
+                Id = r.VoiceId, Model = VoiceCatalog.QwenAudio, Name = $"自定义 {n}",
+                Description = prompt.Length > 18 ? prompt[..18] + "…" : prompt, Language = "en",
+            });
+            VoiceCatalog.LoadCustom(_cfg);
+            _cfg.Send.Voice = r.VoiceId;
+            _cfg.Save();
+            _loading = true;
+            SendVoiceList.ItemsSource = VoiceCatalog.EnglishAll.ToList();
+            SendVoiceList.SelectedItem = VoiceCatalog.EnglishAll.FirstOrDefault(v => v.Id == r.VoiceId);
+            _loading = false;
+            ApplyVoices();
+            Toast($"已生成“自定义 {n}”并设为当前英文声音，正在试听");
+            var tts = VoiceCatalog.Resolve(r.VoiceId, _cfg.Send.TtsRate, _cfg.Send.Style, _cfg.Send.CustomInstruction, _cfg.DashScope.TtsModel, "en");
+            await VoicePreview.PlayAsync(_cfg, key, tts, VoicePreview.EnglishSample);
+        }
+        catch (Exception ex)
+        {
+            Toast("生成失败：" + ex.Message);
+        }
+        finally
+        {
+            DesignBtn.IsEnabled = true;
+            DesignBtn.Content = "生成新音色";
         }
     }
 

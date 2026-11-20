@@ -23,7 +23,8 @@ public static class VoicePreview
         mixer.AddInput(player);
         mixer.Start();
         var slot = player.Enqueue(1, 0, text);
-        await using (var tts = CosyVoiceSession.Prepare(cfg.DashScope, apiKey, voice))
+        ITtsSession session = Qwen3TtsSession.Handles(voice.Model) ? new Qwen3TtsSession(cfg.DashScope, apiKey, voice) : CosyVoiceSession.Prepare(cfg.DashScope, apiKey, voice);
+        await using (var tts = session)
         {
             await tts.SpeakAsync(text, pcm => player.Append(slot, pcm), cts.Token);
         }
