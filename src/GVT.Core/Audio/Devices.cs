@@ -52,6 +52,10 @@ public sealed class CaptureSource : IDisposable
     public int Channels { get; }
     public volatile float LastPeakDb = -120f;
 
+    /// <summary>开始录音后丢弃的时长：虚拟线开始录音时会先吐出一段上次残留的缓存。</summary>
+    public int SkipInitialMs { get; set; } = 300;
+    private long _startTicks;
+
     /// <summary>采集线程上回调：交错 float 样本。</summary>
     public event Action<float[]>? Data;
     public event Action<Exception?>? Stopped;
@@ -71,12 +75,17 @@ public sealed class CaptureSource : IDisposable
         _capture.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);
     }
 
-    public void Start() => _capture.StartRecording();
+    public void Start()
+    {
+        _startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        _capture.StartRecording();
+    }
     public void Stop() { try { _capture.StopRecording(); } catch { /* 设备可能已移除 */ } }
 
     private void OnData(object? sender, WaveInEventArgs e)
     {
         if (e.BytesRecorded == 0) return;
+        if (System.Diagnostics.Stopwatch.GetElapsedTime(_startTicks).TotalMilliseconds < SkipInitialMs) return;
         float[] samples;
         var bytes = e.Buffer.AsSpan(0, e.BytesRecorded);
         if (_isFloat)

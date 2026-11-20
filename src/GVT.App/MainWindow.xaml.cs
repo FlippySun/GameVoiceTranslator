@@ -75,11 +75,11 @@ public partial class MainWindow : Window
             Fill(SourceCombo, capture, _cfg.Receive.SourceDevice);
             Fill(HeadphoneCombo, render, _cfg.Receive.HeadphoneDevice);
 
-            bool hasA = render.Any(n => n.Contains("CABLE-A", StringComparison.OrdinalIgnoreCase));
-            bool hasB = capture.Any(n => n.Contains("CABLE-B", StringComparison.OrdinalIgnoreCase));
+            bool hasA = render.Any(n => n.Contains("VB-Audio Virtual Cable", StringComparison.OrdinalIgnoreCase));
+            bool hasB = capture.Any(n => n.Contains("VB-Audio Hi-Fi Cable", StringComparison.OrdinalIgnoreCase));
             SetupHint.Text = hasA && hasB
-                ? "已检测到 VB-CABLE A+B。MW4 设置 → 音频：麦克风输入设备选 “CABLE-A Output”，语音聊天输出设备选 “CABLE-B Input”，语音录制方式用开放麦克风。"
-                : "未检测到 VB-CABLE A+B 虚拟声卡。请先安装（见 README），重启电脑后点“刷新设备”。";
+                ? "已检测到 VB-CABLE 和 Hi-Fi Cable。MW4 设置 → 音频：麦克风输入设备选 “CABLE Output”，语音聊天输出设备选 “Hi-Fi Cable Input”，语音录制方式用开放麦克风。"
+                : "未检测到 VB-CABLE 或 Hi-Fi Cable 虚拟声卡。请先安装（见 README）后点“刷新设备”。";
         }
         catch (Exception ex)
         {

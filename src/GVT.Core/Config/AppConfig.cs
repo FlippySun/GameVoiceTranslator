@@ -83,13 +83,18 @@ public sealed class DashScopeConfig
 
     public int RequestTimeoutMs { get; set; } = 8000;
 
+    /// <summary>可选：直接指定 WebSocket 地址（如千问AI平台 wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference）。</summary>
+    public string WebSocketUrlOverride { get; set; } = "";
+    /// <summary>可选：直接指定 OpenAI 兼容地址（含 /compatible-mode/v1 之类的前缀）。</summary>
+    public string CompatibleBaseUrlOverride { get; set; } = "";
+
     [JsonIgnore]
-    public string WebSocketUrl => string.IsNullOrWhiteSpace(WorkspaceId)
+    public string WebSocketUrl => !string.IsNullOrWhiteSpace(WebSocketUrlOverride) ? WebSocketUrlOverride : string.IsNullOrWhiteSpace(WorkspaceId)
         ? "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
         : $"wss://{WorkspaceId}.{Region}.maas.aliyuncs.com/api-ws/v1/inference";
 
     [JsonIgnore]
-    public string CompatibleBaseUrl => string.IsNullOrWhiteSpace(WorkspaceId)
+    public string CompatibleBaseUrl => !string.IsNullOrWhiteSpace(CompatibleBaseUrlOverride) ? CompatibleBaseUrlOverride : string.IsNullOrWhiteSpace(WorkspaceId)
         ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
         : $"https://{WorkspaceId}.{Region}.maas.aliyuncs.com/compatible-mode/v1";
 }
@@ -110,7 +115,7 @@ public sealed class SendConfig
 {
     public bool Enabled { get; set; } = true;
     public string MicDevice { get; set; } = "";
-    public string OutputDevice { get; set; } = "CABLE-A Input";
+    public string OutputDevice { get; set; } = "CABLE Input (VB-Audio Virtual Cable)";
     public GateMode Gate { get; set; } = GateMode.PushToTalk;
     public string AsrLanguageHint { get; set; } = "zh";
     public string Voice { get; set; } = "loongandy_v3";
@@ -127,7 +132,7 @@ public sealed class SendConfig
 public sealed class ReceiveConfig
 {
     public bool Enabled { get; set; } = true;
-    public string SourceDevice { get; set; } = "CABLE-B Output";
+    public string SourceDevice { get; set; } = "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)";
     public string HeadphoneDevice { get; set; } = "";
     public string AsrLanguageHint { get; set; } = "en";
     public string Voice { get; set; } = "longanyang";

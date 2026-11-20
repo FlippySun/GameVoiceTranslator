@@ -42,6 +42,38 @@ try
             foreach (var d in DeviceCatalog.ListRender()) Console.WriteLine("  " + d);
             Console.WriteLine("录音设备：");
             foreach (var d in DeviceCatalog.ListCapture()) Console.WriteLine("  " + d);
+            Console.WriteLine(DefaultDevices.Describe());
+            return 0;
+        case "sessions" when args.Length > 1:
+        {
+            var dev = DeviceCatalog.FindRender(args[1]);
+            var sessions = dev.AudioSessionManager.Sessions;
+            for (int i = 0; i < sessions.Count; i++)
+            {
+                var s = sessions[i];
+                string proc;
+                try { proc = System.Diagnostics.Process.GetProcessById((int)s.GetProcessID).ProcessName; } catch { proc = "?"; }
+                Console.WriteLine($"  {proc} (pid {s.GetProcessID}) 状态 {s.State} 峰值 {s.AudioMeterInformation.MasterPeakValue:F3}");
+            }
+            return 0;
+        }
+        case "listen" when args.Length > 1:
+        {
+            // 只录不放：每 250 ms 打印一次峰值，用来确认虚拟线空闲时是否真的安静
+            using var cap = new CaptureSource(DeviceCatalog.FindCapture(args[1]));
+            float peak = -120f;
+            cap.Data += s => { var p = PcmConvert.PeakDb(s); if (p > peak) peak = p; };
+            cap.Start();
+            for (int i = 0; i < 12; i++) { await Task.Delay(250); Console.Write($"{peak:F0} "); peak = -120f; }
+            Console.WriteLine();
+            return 0;
+        }
+        case "cable-test" when args.Length > 2:
+            return await CableTest(args[1], args[2]);
+        case "set-default" when args.Length > 2:
+            var flow = args[1] == "capture" ? NAudio.CoreAudioApi.DataFlow.Capture : NAudio.CoreAudioApi.DataFlow.Render;
+            bool? comms = Flag("--comms") ? true : Flag("--media") ? false : null;
+            Console.WriteLine("已设为默认：" + DefaultDevices.Set(flow, args[2], comms));
             return 0;
         case "mt" when args.Length > 1:
             return await RunMt(args[1]);
@@ -203,6 +235,29 @@ async Task<int> RunPipeline(string wavDir, bool fast)
     Console.WriteLine(usage);
     Console.WriteLine($"译音与延迟明细：{outDir}");
     return 0;
+}
+
+// 往虚拟线的输入端放 1 kHz 测试音，同时从输出端录音，确认声音能穿过去
+static async Task<int> CableTest(string renderName, string captureName)
+{
+    using var mixer = new OutputMixer(DeviceCatalog.FindRender(renderName));
+    using var cap = new CaptureSource(DeviceCatalog.FindCapture(captureName));
+    var tone = new NAudio.Wave.SampleProviders.SignalGenerator(mixer.SampleRate, mixer.Channels)
+    {
+        Type = NAudio.Wave.SampleProviders.SignalGeneratorType.Sin, Frequency = 1000, Gain = 0.25,
+    };
+    float peak = -120f;
+    cap.Data += s => { var p = PcmConvert.PeakDb(s); if (p > peak) peak = p; };
+    cap.Start();
+    await Task.Delay(300);
+    float silence = peak;
+    peak = -120f;
+    mixer.AddInput(tone);
+    mixer.Start();
+    await Task.Delay(1200);
+    Console.WriteLine($"{mixer.DeviceName}（{mixer.SampleRate} Hz/{mixer.Channels}ch） → {cap.DeviceName}（{cap.SampleRate} Hz/{cap.Channels}ch）");
+    Console.WriteLine($"  放音前峰值 {silence:F1} dBFS，放音时峰值 {peak:F1} dBFS → {(peak > -20 ? "通过" : "未检测到测试音")}");
+    return peak > -20 ? 0 : 3;
 }
 
 static float[] Load16kMono(string path)

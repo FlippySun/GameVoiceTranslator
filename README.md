@@ -4,8 +4,8 @@
 首个目标场景：**Call of Duty: Modern Warfare 4（DMZ）** 与 **Discord**。
 
 ```
-发送：真实麦克风 →（按住说话）→ 中文识别 → 中译英 → 英文合成 → 虚拟线 A → 游戏把 CABLE-A Output 当麦克风
-接收：游戏“语音聊天输出设备”= 虚拟线 B → 语音检测 → 英文识别 → 英译中 → 中文合成 ┐
+发送：真实麦克风 →（按住说话）→ 中文识别 → 中译英 → 英文合成 → VB-CABLE → 游戏把 CABLE Output 当麦克风
+接收：游戏“语音聊天输出设备”= Hi-Fi Cable → 语音检测 → 英文识别 → 英译中 → 中文合成 ┐
                                        └→ 队友原声（可压低 / 按住放大）────────────┴→ 耳机
 游戏音效：直接走游戏自己的“游戏音效设备”到耳机，不经过本程序。
 ```
@@ -17,19 +17,25 @@
 
 ## 一、一次性准备
 
-### 1. 安装虚拟声卡 VB-CABLE A+B
-1. 打开 <https://vb-audio.com/Cable/>，下载 **VB-CABLE A+B**（个人使用为捐赠软件）。
-2. 解压后右键 `VBCABLE_Setup_x64.exe` →“以管理员身份运行”→ Install Driver。
-3. **重启电脑**。
-4. Windows 设置 → 系统 → 声音，确认出现：播放设备 `CABLE-A Input`、`CABLE-B Input`，录音设备 `CABLE-A Output`、`CABLE-B Output`。
-5. 确认 **Windows 默认播放设备仍然是你的耳机**，默认录音设备仍然是你的真实麦克风。
+### 1. 安装虚拟声卡（两条免费的 VB-Audio 虚拟线）
+VB-CABLE A+B 需要付费购买后才能下载，所以改用两条免费的 VB-Audio 虚拟线，效果相同：
+
+| 用途 | 驱动 | 播放端（往里放声音） | 录音端（从里面取声音） |
+|---|---|---|---|
+| 发送：英文译音 → 游戏麦克风 | VB-CABLE（[VBCABLE_Driver_Pack46.zip](https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip)） | `CABLE Input` | `CABLE Output` |
+| 接收：游戏队友语音 → 本程序 | Hi-Fi Cable（[HiFiCableAsioBridgeSetup_v1007.zip](https://download.vb-audio.com/Download_CABLE/HiFiCableAsioBridgeSetup_v1007.zip)） | `Hi-Fi Cable Input` | `Hi-Fi Cable Output` |
+
+安装：以管理员身份运行 `VBCABLE_Setup_x64.exe -i -h` 和 `HiFiCableAsioBridgeSetup.exe -i -h`。
+**安装后 Windows 会把默认播放设备切到虚拟线，必须改回耳机**，可以用下面的命令，或者在 Windows 声音设置里手动改：
+`dotnet run --project src/GVT.Replay -- set-default render "你的耳机名称"`
+用 `... -- cable-test "CABLE Input (VB-Audio Virtual Cable)" "CABLE Output (VB-Audio Virtual Cable)"` 可以验证虚拟线是否能传声音。
 
 ### 2. Windows 声音设置（重要）
 - 控制面板 → 声音 →“通信”选项卡 → 选 **“不执行任何操作”**。否则 Windows 一检测到“通话”就会把游戏音量压低 80%，脚步声会变小。
 - 建议使用有线或 2.4G 耳机。蓝牙耳机开启麦克风后会切到通话模式，音质和采样率都会明显下降。
 
-### 3. 百炼 API Key
-1. 登录阿里云百炼控制台，地域选 **华北2（北京）**，创建 API Key。
+### 3. 百炼 API Key（必须是“按量付费”Key）
+1. 在千问AI平台 / 百炼控制台的“按量付费”区域点“创建 API Key”（sk-ws- 开头）。**Token Plan / Coding Plan 个人版的 sk-sp- Key 不能用**：它只允许在 Cursor、Claude Code 这类开发工具里交互使用，也不包含实时语音识别和合成。
 2. 在模型广场确认以下模型可用：`fun-asr-realtime`、`qwen-mt-flash`、`cosyvoice-v3-flash`（可选：`qwen-flash`）。
 3. 打开本程序，把 Key 粘贴进第 1 栏并保存。Key 用 Windows 当前用户加密保存，不会以明文写到磁盘上，也可以改用环境变量 `DASHSCOPE_API_KEY`。
 
@@ -37,14 +43,14 @@
 | 项目 | 选择 |
 |---|---|
 | 游戏音效设备（Speakers/Headphones Game Sound Device） | 你的耳机（不变） |
-| **语音聊天输出设备（Voice Chat Output Device）** | **CABLE-B Input** |
-| **麦克风输入设备（Microphone Input Device）** | **CABLE-A Output** |
+| **语音聊天输出设备（Voice Chat Output Device）** | **Hi-Fi Cable Input** |
+| **麦克风输入设备（Microphone Input Device）** | **CABLE Output** |
 | 语音录制方式 | **开放麦克风**（按住说话由本程序负责；虚拟麦克风里只有译音，开放麦克风是安全的） |
 
 > 显示模式请用**无边框全屏**，否则字幕小窗可能被游戏盖住。快捷键在独占全屏下也能用。
 
 ### 5. Discord 设置（用 Discord 和朋友测试时）
-- 输入设备：`CABLE-A Output`；输出设备：`CABLE-B Input`
+- 输入设备：`CABLE Output`；输出设备：`Hi-Fi Cable Input`
 - 输入模式：语音激活，并**关闭“自动确定输入灵敏度”**，手动把门限调低
 - 关闭降噪（Krisp）、回声消除、自动增益控制（它们可能削弱合成语音）
 - 关闭“语音 → 衰减”
@@ -83,7 +89,7 @@
 | 1 | 翻译质量与速度（不需要声卡） | `dotnet run --project src/GVT.Replay -- mt corpus/zh2en.tsv`，再加 `--translator llm` 跑一遍对比 | 关键词检查（否定、方向、数量、改口）全部通过 |
 | 2 | 英译中质量 | `... -- mt corpus/en2zh.tsv --dir en2zh` | 同上 |
 | 3 | 完整链路延迟（不需要声卡） | `... -- synth corpus/zh2en.tsv --out samples/zh`，然后 `... -- run samples/zh` | 句末到开始播放 P50 ≤ 1.5 s |
-| 4 | 本机接线 | 开始翻译后，用 Windows“录音机”录 `CABLE-A Output`，按住侧键说一句中文 | 录音里只有英文译音，没有你的中文原声 |
+| 4 | 本机接线 | 开始翻译后，用 Windows“录音机”录 `CABLE Output`，按住侧键说一句中文 | 录音里只有英文译音，没有你的中文原声 |
 | 5 | Discord 双向 | 手机登录另一个 Discord 账号，和电脑在同一语音频道 | 手机听到英文；对手机说英文，电脑耳机里听到中文；双方都停止说话后完全安静 |
 | 6 | MW4 实测 | 按上表设置后进一局 DMZ | 队友能听到译音；中文播报期间脚步声、枪声正常 |
 | 7 | 故障 | 打一局中途拔网线、拔耳机，或在任务管理器结束主程序 | 状态提示清楚；崩溃后能听到队友原声 |
