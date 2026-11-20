@@ -76,8 +76,8 @@ public sealed class DashScopeConfig
     public string TtsModel { get; set; } = "cosyvoice-v3-flash";
     public int TtsSampleRate { get; set; } = 48000;
 
-    /// <summary>mt = qwen-mt 专用翻译模型（支持术语）；llm = 通用模型 + 提示词。</summary>
-    public TranslatorKind Translator { get; set; } = TranslatorKind.Mt;
+    /// <summary>llm = 通用模型 + 规则提示词（默认，实测改口和主语更准）；mt = qwen-mt 专用翻译模型。</summary>
+    public TranslatorKind Translator { get; set; } = TranslatorKind.Llm;
     public string MtModel { get; set; } = "qwen-mt-flash";
     public string LlmModel { get; set; } = "qwen-flash";
 

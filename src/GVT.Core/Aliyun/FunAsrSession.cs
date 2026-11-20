@@ -20,12 +20,16 @@ public sealed class FunAsrSession : IAsrSession
     private readonly TaskCompletionSource<string> _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _cts = new();
     private readonly SortedDictionary<long, string> _finals = new();
+    private readonly SortedDictionary<long, List<GVT.Core.Pipeline.AsrWord>> _finalWords = new();
+    private readonly List<float> _pcm = new(); // 本句音频副本，用于找回被吞掉的停顿
     private readonly object _lock = new();
     private string _partial = "";
     private long _samples;
     private DashScopeSocket? _socket;
     private Task? _run;
 
+    /// <summary>调试用：服务端原始 JSON。</summary>
+    public event Action<string>? RawMessage;
     public event Action<string>? Partial;
     public double AudioSeconds => Interlocked.Read(ref _samples) / 16000.0;
 
@@ -46,6 +50,7 @@ public sealed class FunAsrSession : IAsrSession
     {
         if (samples16k.Length == 0) return;
         Interlocked.Add(ref _samples, samples16k.Length);
+        lock (_pcm) foreach (var s in samples16k) _pcm.Add(s);
         _audio.Writer.TryWrite(PcmConvert.FloatToPcm16(samples16k));
     }
 
@@ -113,6 +118,7 @@ public sealed class FunAsrSession : IAsrSession
 
     private void OnJson(JsonElement msg)
     {
+        RawMessage?.Invoke(msg.GetRawText());
         switch (DashScopeSocket.EventOf(msg))
         {
             case "task-started":
@@ -122,7 +128,7 @@ public sealed class FunAsrSession : IAsrSession
                 HandleResult(msg);
                 break;
             case "task-finished":
-                _finished.TrySetResult(CurrentText(includePartial: false));
+                _finished.TrySetResult(FinalText());
                 break;
             case "task-failed":
                 var err = new DashScopeException("识别失败 " + DashScopeSocket.ErrorOf(msg));
@@ -140,12 +146,40 @@ public sealed class FunAsrSession : IAsrSession
         var text = s.TryGetProperty("text", out var t) ? t.GetString() ?? "" : "";
         long id = s.TryGetProperty("sentence_id", out var sid) && sid.ValueKind == JsonValueKind.Number ? sid.GetInt64() : 0;
         bool end = s.TryGetProperty("sentence_end", out var se) && se.ValueKind == JsonValueKind.True;
+        List<GVT.Core.Pipeline.AsrWord>? words = null;
+        if (end && s.TryGetProperty("words", out var ws) && ws.ValueKind == JsonValueKind.Array)
+        {
+            words = new();
+            foreach (var w in ws.EnumerateArray())
+                words.Add(new GVT.Core.Pipeline.AsrWord(
+                    w.TryGetProperty("begin_time", out var b) && b.ValueKind == JsonValueKind.Number ? b.GetInt64() : 0,
+                    w.TryGetProperty("end_time", out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt64() : 0,
+                    w.TryGetProperty("text", out var wt) ? wt.GetString() ?? "" : "",
+                    w.TryGetProperty("punctuation", out var wp) ? wp.GetString() ?? "" : ""));
+        }
         lock (_lock)
         {
-            if (end) { _finals[id] = text; _partial = ""; }
+            if (end)
+            {
+                _finals[id] = text;
+                _partial = "";
+                if (words is { Count: > 0 }) _finalWords[id] = words;
+            }
             else _partial = text;
         }
         Partial?.Invoke(CurrentText(includePartial: true));
+    }
+
+    /// <summary>最终文本：有字级时间戳时，用原始音频补回被吞掉的停顿。</summary>
+    private string FinalText()
+    {
+        float[] pcm;
+        lock (_pcm) pcm = _pcm.ToArray();
+        lock (_lock)
+        {
+            if (_finalWords.Count != _finals.Count) return CurrentText(includePartial: false);
+            return string.Join(" ", _finalWords.Values.Select(w => GVT.Core.Pipeline.PauseRestorer.Restore(w, pcm))).Trim();
+        }
     }
 
     private string CurrentText(bool includePartial)

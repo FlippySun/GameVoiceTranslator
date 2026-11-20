@@ -28,6 +28,8 @@ string Opt(string name, string def)
 bool Flag(string name) => args.Contains(name);
 
 var cfg = AppConfig.LoadOrCreate();
+var modelOpt = Opt("--model", "");
+if (modelOpt != "") cfg.DashScope.LlmModel = modelOpt;
 var translatorOpt = Opt("--translator", "");
 if (translatorOpt == "llm") cfg.DashScope.Translator = TranslatorKind.Llm;
 if (translatorOpt == "mt") cfg.DashScope.Translator = TranslatorKind.Mt;
@@ -44,6 +46,46 @@ try
             foreach (var d in DeviceCatalog.ListCapture()) Console.WriteLine("  " + d);
             Console.WriteLine(DefaultDevices.Describe());
             return 0;
+        case "save-key":
+        {
+            // 从标准输入读取 Key 并用 DPAPI 加密保存，不回显
+            var k = Console.In.ReadLine()?.Trim();
+            if (string.IsNullOrEmpty(k)) { Console.Error.WriteLine("没有读到 Key"); return 1; }
+            SecretStore.SaveApiKey(k);
+            Console.WriteLine($"已加密保存（{k[..6]}…，长度 {k.Length}）");
+            return 0;
+        }
+        case "asr-dump" when args.Length > 1:
+        {
+            // 打印识别服务返回的原始 JSON（看字级时间戳）
+            var key = SecretStore.GetApiKey()!;
+            var samples = Load16kMono(args[1]);
+            await using var s = FunAsrSession.Start(cfg.DashScope, key, Opt("--lang", "en"), null);
+            s.RawMessage += m => { if (m.Contains("\"sentence_end\":true")) Console.WriteLine(m); };
+            for (int off = 0; off < samples.Length; off += 1600) { s.Push(samples.AsSpan(off, Math.Min(1600, samples.Length - off))); await Task.Delay(100); }
+            Console.WriteLine("最终：" + await s.FinishAsync(CancellationToken.None));
+            return 0;
+        }
+        case "engine-smoke":
+        {
+            // 用真实设备启动整套引擎几秒钟（不说话就不会产生任何声音或费用），确认设备都能打开
+            var (g, svc) = Services();
+            var root = AppContext.BaseDirectory;
+            while (root != null && !File.Exists(Path.Combine(root, "GameVoiceTranslator.sln"))) root = Path.GetDirectoryName(root);
+            using var engine = new Engine(cfg, svc, g, root ?? AppContext.BaseDirectory);
+            Log.Line += l => Console.WriteLine("  " + l);
+            engine.Start();
+            for (int i = 0; i < 4; i++)
+            {
+                await Task.Delay(1000);
+                var st = engine.GetStatus();
+                Console.WriteLine($"  发送 {st.SendStage} 麦克风 {st.MicDb:F0} dB | 接收 {st.ReceiveStage} 来源 {st.SourceDb:F0} dB | {st.Warning}");
+            }
+            engine.Stop();
+            return 0;
+        }
+        case "probe":
+            return await Probe();
         case "sessions" when args.Length > 1:
         {
             var dev = DeviceCatalog.FindRender(args[1]);
@@ -126,7 +168,14 @@ async Task<int> RunMt(string corpusPath)
         sw.Stop();
         latencies.Add(sw.Elapsed.TotalMilliseconds);
         // 关键词组内用 / 表示“任选其一”，例如 don't/do not
-        var missing = must.Where(m => !m.Split('/').Any(alt => tr.Contains(alt, StringComparison.OrdinalIgnoreCase))).ToArray();
+        // 以 ! 开头表示“译文里不能出现”，用来检查改口后旧说法有没有残留
+        var missing = must.Where(m => m.StartsWith('!')
+                ? (m[1..].Any(c => c > 127)
+                    ? tr.Contains(m[1..])
+                    : System.Text.RegularExpressions.Regex.IsMatch(tr, @"\b" + System.Text.RegularExpressions.Regex.Escape(m[1..]) + @"\b",
+                        m.Length == 2 ? System.Text.RegularExpressions.RegexOptions.None : System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                : !m.Split('/').Any(alt => tr.Contains(alt, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
         if (missing.Length > 0) fails++;
         Console.WriteLine($"{(missing.Length > 0 ? "✗" : "✓")} {sw.ElapsedMilliseconds,5}ms  {text}  →  {tr}{(missing.Length > 0 ? "   缺少: " + string.Join(", ", missing) : "")}");
         sb.AppendLine($"\"{text.Replace("\"", "\"\"")}\",\"{tr.Replace("\"", "\"\"")}\",{sw.ElapsedMilliseconds},\"{string.Join(" ", missing)}\"");
@@ -235,6 +284,61 @@ async Task<int> RunPipeline(string wavDir, bool fast)
     Console.WriteLine(usage);
     Console.WriteLine($"译音与延迟明细：{outDir}");
     return 0;
+}
+
+// 依次尝试候选接口地址，找出这把 Key 能用的识别、翻译、合成入口
+async Task<int> Probe()
+{
+    var key = SecretStore.GetApiKey() ?? throw new InvalidOperationException("没有 API Key");
+    var glossary = Glossary.Load(cfg.ResolveGlossaryPath());
+    string[] httpBases = { "https://dashscope.aliyuncs.com/compatible-mode/v1", "https://maas.qianwenaiapi.com/compatible-mode/v1", "https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1" };
+    string[] wsUrls = { "wss://dashscope.aliyuncs.com/api-ws/v1/inference", "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference", "wss://maas.qianwenaiapi.com/api-ws/v1/inference" };
+
+    string? goodHttp = null, goodWs = null;
+    foreach (var b in httpBases)
+    {
+        var dc = Clone(cfg.DashScope); dc.CompatibleBaseUrlOverride = b;
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var r = await new QwenTranslator(dc, key, glossary).TranslateAsync("左边二楼有两个人，别开枪", Direction.ZhToEn, Array.Empty<string>(), CancellationToken.None);
+            Console.WriteLine($"✓ 翻译 {b}  {sw.ElapsedMilliseconds}ms  → {r.Text}");
+            goodHttp ??= b;
+        }
+        catch (Exception ex) { Console.WriteLine($"✗ 翻译 {b}  {Short(ex.Message)}"); }
+    }
+    foreach (var u in wsUrls)
+    {
+        var dc = Clone(cfg.DashScope); dc.WebSocketUrlOverride = u;
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            int bytes = 0;
+            await using var tts = CosyVoiceSession.Prepare(dc, key, cfg.Send.Voice, 1.0, "en");
+            await tts.SpeakAsync("Two on the left, second floor. Don't shoot.", s => bytes += s.Length, CancellationToken.None);
+            Console.WriteLine($"✓ 合成 {u}  {sw.ElapsedMilliseconds}ms  {bytes / (double)dc.TtsSampleRate:F1}s 音频");
+            sw.Restart();
+            await using var asr = FunAsrSession.Start(dc, key, "zh", null);
+            asr.Push(new float[16000]);
+            var text = await asr.FinishAsync(CancellationToken.None);
+            Console.WriteLine($"✓ 识别 {u}  {sw.ElapsedMilliseconds}ms（静音测试，结果“{text}”）");
+            goodWs ??= u;
+        }
+        catch (Exception ex) { Console.WriteLine($"✗ 语音 {u}  {Short(ex.Message)}"); }
+    }
+    if (goodHttp != null && goodWs != null)
+    {
+        cfg.DashScope.CompatibleBaseUrlOverride = goodHttp == httpBases[0] ? "" : goodHttp;
+        cfg.DashScope.WebSocketUrlOverride = goodWs == wsUrls[0] ? "" : goodWs;
+        cfg.Save();
+        Console.WriteLine($"已写入配置：翻译 {goodHttp}，语音 {goodWs}");
+        return 0;
+    }
+    return 4;
+
+    static DashScopeConfig Clone(DashScopeConfig c) => System.Text.Json.JsonSerializer.Deserialize<DashScopeConfig>(
+        System.Text.Json.JsonSerializer.Serialize(c, AppConfig.JsonOptions), AppConfig.JsonOptions)!;
+    static string Short(string s) => s.Length > 220 ? s[..220] + "…" : s;
 }
 
 // 往虚拟线的输入端放 1 kHz 测试音，同时从输出端录音，确认声音能穿过去

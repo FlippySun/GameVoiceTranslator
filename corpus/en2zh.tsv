@@ -3,7 +3,7 @@ Don't shoot, we're friendly	别/不要|友
 Hold fire	别/停/不要
 Two on the left, second floor	两/2|左|二楼/2楼
 One behind you	身后/背后/后面
-He's cracked, push him	破甲/甲|推/冲/压
+He's cracked, push him	破甲/甲|推/冲/压/上
 I'm down, pick me up	倒|拉/扶/救
 He's not dead yet	没死/还活着
 We already exfilled	已经|撤
@@ -11,11 +11,15 @@ I'm not there yet	还没
 Don't go in there, it's a trap	别/不要|陷阱
 Where is the exfil	撤离|哪
 Do you want to team up	组队|吗/？
-How many of you are there	几个/多少
+How many of you are there	几个/几人/多少
 Cover me, I'm reloading	掩护|换弹
 Fall back	撤/退
 Watch the roof	楼顶/房顶/屋顶
-Sniper on the rooftop, north	狙|楼顶/房顶|北
+Sniper on the rooftop, north	狙|楼顶/房顶/屋顶|北
 Wait for the chopper	等|直升机
 Got one, one more left	一个|还有/还剩
-Left... no, right building	右
+Left... no, right building	右|!左
+# 识别结果经停顿还原后的改口（不能凭空生成其他指令；保留“不对”式改口可以接受）
+left… no… right building.	右|!撤
+he is down. no wait, he is dead.	死|!撤
+go up… no… downstairs.	下|!撤

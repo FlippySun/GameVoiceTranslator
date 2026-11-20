@@ -9,25 +9,25 @@
 我们不打你，友好	friendly/won't/not
 # 方位与楼层
 左边二楼有一个人	left|second floor/2nd floor|one
-右后方有人	right|behind/back
+右后方有人	right|behind/back/rear
 敌人在你身后	behind you/your six
 他在楼顶	roof
 西边那栋楼里有两个	west|two
 往北走	north
 # 改口
-左边……不对，右边那个楼	right
-两个人，哦不，三个	three
-去A点，算了，去B点	B
+左边……不对，右边那个楼	right|!left
+两个人，哦不，三个	three|!two
+去A点，算了，去B点	B|!A
 # 数量与人称
 还剩两个人	two
 我倒了，快拉我	I'm down/I'm downed/I got downed|revive/pick me up
 他倒了，补枪	downed/down|finish
 打掉一个了，还有一个	one
-我破甲了	my armor/I'm cracked/my plates/armor broke
+我破甲了	my/I'm|!him
 他破甲了	cracked|he/his
 # 时间与状态
 他们已经撤了	already|exfil/left/extracted/gone
-我还没到	not there/haven't/not yet
+我还没到	not there/haven't/not yet|!exfil
 等直升机来了再一起撤离	chopper/helicopter|exfil/extract
 # 条件
 你掩护我，我去拿钥匙	cover|key
@@ -43,7 +43,10 @@
 这个地方可以 exfil 吗	exfil|?
 有个 UAV 在天上	UAV
 # 交涉
-我们只做任务，不打人	contract/mission|not/won't/don't
+我们只做任务，不打人	contract/mission|not/won't/don't/no
 可以一起撤离吗	together|exfil/extract|?
 你们是几个人	how many
 我把钥匙给你，别打我	key|don't
+# 识别丢了停顿/听错英文词的情况
+先别噗血，等我。	push|!heal
+这个地方可以x feel吗？	exfil

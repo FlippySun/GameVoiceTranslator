@@ -88,7 +88,12 @@ public sealed class QwenTranslator : ITranslator
             .AppendLine("- Output ONLY the translation. Never answer questions, never comment, never add tactical advice.")
             .AppendLine("- Keep it short and spoken, like a gamer callout.")
             .AppendLine("- Preserve negations, directions (left/right/front/behind/floors), numbers, who-did-what, tense and conditions exactly.")
-            .AppendLine("- If the speaker corrects themselves (e.g. 'left... no, right'), output only the corrected final meaning.")
+            .AppendLine("- If the speaker corrects themselves (pattern: A... no, B / A, wait, B / A 不对 B / A 算了 B), translate ONLY B and drop A entirely. Speech recognition often drops the pause, so 'A no B' is also a self-correction.")
+            .AppendLine("- Keep the subject exactly: 'I' vs 'he' vs 'they'. 我破甲了 = my armor is broken (I'm cracked); 他破甲了 = his armor is broken (he's cracked).")
+            .AppendLine("- Downed is not dead: 倒地/倒了 = downed (can be revived), 死/死了/击杀 = dead/killed. 还没死 = not dead yet.")
+            .AppendLine("- Keep time words: already (已经), not yet (还没), still (还). 已经撤了 = already exfilled (finished, not ongoing). Keep questions as questions (where/how many/do you...?).")
+            .AppendLine("- 拉我/扶我/救我 = revive me / pick me up (never 'pull me').")
+            .AppendLine("- The input comes from speech recognition and may contain misheard English game words. Fix obvious ones using game context before translating (misheard forms of exfil, push, cover, UAV, plates, etc.).")
             .AppendLine($"- Keep player names and words already in {tgt} unchanged.")
             .AppendLine("- Do not add profanity or slurs that are not in the original; tone down extreme insults.")
             .AppendLine("- If the input is only noise or meaningless filler, output nothing.")
@@ -100,7 +105,7 @@ public sealed class QwenTranslator : ITranslator
         return new
         {
             model = _cfg.LlmModel,
-            temperature = 0.2,
+            temperature = 0.0,
             enable_thinking = false,
             messages = new object[]
             {
