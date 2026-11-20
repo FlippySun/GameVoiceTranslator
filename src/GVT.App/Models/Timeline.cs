@@ -58,6 +58,16 @@ public sealed class TimelineItem : Observable
     public string Note { get => _note; set { if (Set(ref _note, value)) RaiseTexts(); } }
     public ItemState State { get => _state; set { if (Set(ref _state, value)) RaiseTexts(); } }
 
+    private float[]? _audio;
+    private bool _isPlaying;
+
+    /// <summary>这句话的合成语音（我：队友听到的英文；队友：我听到的中文），用于在本机重听。</summary>
+    public float[]? Audio { get => _audio; set { _audio = value; Raise(); Raise(nameof(HasAudio)); } }
+    public int AudioRate { get; set; } = 48000;
+    public bool HasAudio => _audio is { Length: > 0 };
+    public bool IsPlaying { get => _isPlaying; set => Set(ref _isPlaying, value); }
+    public string PlayTip => IsMe ? "在耳机里听队友听到的英文（不会再发出去）" : "在耳机里重听这句中文";
+
     /// <summary>浮窗淡出用。</summary>
     public double Opacity { get => _opacity; set => Set(ref _opacity, value); }
 
@@ -155,6 +165,18 @@ public sealed class TimelineStore
                 item.State = ItemState.Error;
                 break;
         }
+    }
+
+    /// <summary>只给最近这么多句保留音频，控制内存（每句约 0.5–1 MB）。</summary>
+    public int MaxAudioItems { get; set; } = 60;
+
+    public void AttachAudio(string channel, long id, float[] audio, int rate)
+    {
+        if (!_index.TryGetValue((channel, id), out var item)) return;
+        item.AudioRate = rate;
+        item.Audio = audio;
+        var withAudio = Items.Where(i => i.HasAudio).ToList();
+        foreach (var old in withAudio.Take(Math.Max(0, withAudio.Count - MaxAudioItems))) old.Audio = null;
     }
 
     /// <summary>识别结果为空等被静默丢弃的句子：卡片停在“正在听”，需要清理。</summary>

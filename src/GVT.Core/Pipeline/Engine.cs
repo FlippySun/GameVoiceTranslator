@@ -52,6 +52,9 @@ public sealed class Engine : IDisposable
     public event Action<SubtitleEvent>? Subtitle;
     public event Action<LatencyRecord>? Latency;
     public event Action? StatusChanged;
+    /// <summary>（通道名, 句子 id, 单声道音频）。采样率为 TtsSampleRate。</summary>
+    public event Action<string, long, float[]>? UtteranceAudio;
+    public int TtsSampleRate => _services.TtsSampleRate;
 
     public Engine(AppConfig cfg, ISpeechServices services, Glossary glossary, string baseDir)
     {
@@ -192,6 +195,7 @@ public sealed class Engine : IDisposable
         ch.Subtitle += e => Subtitle?.Invoke(e);
         ch.Completed += r => { _csv.Append(r); Latency?.Invoke(r); };
         ch.StageChanged += _ => StatusChanged?.Invoke();
+        ch.AudioReady += (id, audio) => UtteranceAudio?.Invoke(ch.Name, id, audio);
     }
 
     // ---------- 音频回调（采集线程） ----------

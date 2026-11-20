@@ -59,6 +59,8 @@ public sealed class TranslationChannel
     public event Action<SubtitleEvent>? Subtitle;
     public event Action<LatencyRecord>? Completed;
     public event Action<ChannelStage>? StageChanged;
+    /// <summary>一句话的合成语音完整播完（参数：句子 id、TtsSampleRate 下的单声道音频）。用于在界面上重听。</summary>
+    public event Action<long, float[]>? AudioReady;
 
     public TranslationChannel(ChannelOptions opt, ISpeechServices services, SpeechQueuePlayer player, UsageMeter usage)
     {
@@ -278,7 +280,11 @@ public sealed class TranslationChannel
         {
             if (string.IsNullOrEmpty(e.R.Outcome)) e.R.Outcome = slot.EndReason ?? "done";
             if (slot.EndReason == "stale") Emit(slot.Id, SubtitleKind.Dropped, "排队太久，已跳过过时内容：" + slot.Text);
-            if (slot.EndReason == "done" && slot.History.Count > 0) LastPlayed = (slot.Text, slot.History);
+            if (slot.EndReason == "done" && slot.History.Count > 0)
+            {
+                LastPlayed = (slot.Text, slot.History);
+                AudioReady?.Invoke(slot.Id, slot.History.SelectMany(c => c).ToArray());
+            }
             Completed?.Invoke(e.R);
         }
         if (_player.PendingCount == 0 && Volatile.Read(ref _processing) == 0 && _enabled)

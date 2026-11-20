@@ -330,6 +330,8 @@ public partial class MainWindow : Window
             _engine = new Engine(_cfg, services, glossary, AppContext.BaseDirectory);
             _engine.Subtitle += ev => Dispatcher.BeginInvoke(() => _timeline.Apply(ev));
             _engine.Latency += r => Dispatcher.BeginInvoke(() => OnLatency(r));
+            var rate = _engine.TtsSampleRate;
+            _engine.UtteranceAudio += (ch, id, audio) => Dispatcher.BeginInvoke(() => _timeline.AttachAudio(ch, id, audio, rate));
             _engine.Start();
             StartWatchdog();
             Toast("翻译已开始");
@@ -409,7 +411,14 @@ public partial class MainWindow : Window
         _cfg.Save();
     }
 
-    private void ClearTimeline_Click(object sender, RoutedEventArgs e) => _timeline.Clear();
+    private async void PlayClip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: TimelineItem item }) return;
+        try { await ClipPlayer.ToggleAsync(_cfg, item); }
+        catch (Exception ex) { Toast("播放失败：" + ex.Message); }
+    }
+
+    private void ClearTimeline_Click(object sender, RoutedEventArgs e) { ClipPlayer.Stop(); _timeline.Clear(); }
 
     // =====================================================================
     // 声音
@@ -828,5 +837,9 @@ public partial class MainWindow : Window
         Say("接收", 2, "兄弟我在B点", "", "对方说的是中文，不播报");
         Say("发送", 2, "我们只做任务，不打人", "We're only doing contracts, not fighting.");
         _timeline.Apply(new SubtitleEvent("接收", 3, SubtitleKind.Partial, "where is the exfil", DateTime.Now));
+        var tone = Enumerable.Range(0, 24000).Select(i => 0.1f * MathF.Sin(i * 0.05f)).ToArray();
+        _timeline.AttachAudio("发送", 2, tone, 48000);
+        _timeline.AttachAudio("接收", 1, tone, 48000);
+        _timeline.Items.First(i => i.IsMe && i.Id == 2).IsPlaying = true;
     }
 }

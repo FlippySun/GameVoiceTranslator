@@ -71,8 +71,29 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Border x:Name="Bar" Width="3" CornerRadius="2" Margin="0,2,14,2" Background="{StaticResource B.MateGradient}"/>
+                        <!-- 重听这句：我=队友听到的英文，队友=我听到的中文；只在本机耳机播放 -->
+                        <Button x:Name="PlayBtn" Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center" Cursor="Hand"
+                                Click="PlayClip_Click" Tag="{Binding}" ToolTip="{Binding PlayTip}" FocusVisualStyle="{x:Null}"
+                                Visibility="{Binding HasAudio, Converter={StaticResource BoolVis}}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Grid Width="34" Height="34">
+                                        <Ellipse x:Name="Disc" Fill="{StaticResource B.Surface3}" Stroke="{StaticResource B.BorderStrong}" StrokeThickness="1"/>
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Disc" Property="Stroke" Value="{StaticResource B.Text3}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <TextBlock x:Name="PlayGlyph" Text="&#xE768;" FontFamily="{StaticResource F.Icon}" FontSize="12"
+                                       Foreground="{StaticResource B.Mate}" Margin="2,0,0,0"/>
+                        </Button>
                         <StackPanel Grid.Column="1">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Border x:Name="WhoChip" Style="{StaticResource Chip}" Background="{StaticResource B.MateSoft}" Padding="8,2">
@@ -109,6 +130,12 @@
                     <Setter TargetName="WhoIcon" Property="Text" Value="&#xE720;"/>
                     <Setter TargetName="WhoText" Property="Foreground" Value="{StaticResource B.Me}"/>
                     <Setter TargetName="BusyDot" Property="Fill" Value="{StaticResource B.Me}"/>
+                    <Setter TargetName="PlayGlyph" Property="Foreground" Value="{StaticResource B.Me}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                    <Setter TargetName="PlayGlyph" Property="Text" Value="&#xE71A;"/>
+                    <Setter TargetName="PlayGlyph" Property="Margin" Value="0"/>
+                    <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource B.BorderStrong}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsSystem}" Value="True">
                     <Setter TargetName="Card" Property="Visibility" Value="Collapsed"/>
