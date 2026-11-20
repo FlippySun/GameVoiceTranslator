@@ -1,0 +1,21 @@
+<Window x:Class="GVT.App.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GVT Overlay"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False"
+        ResizeMode="NoResize" SizeToContent="Height">
+    <Border x:Name="Panel" CornerRadius="8" Padding="10,8" Background="#B0101418">
+        <StackPanel>
+            <TextBlock x:Name="StatusLine" Foreground="#FFB8C4CC" FontSize="13" Margin="0,0,0,4" TextWrapping="Wrap"/>
+            <ItemsControl x:Name="Lines">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" FontSize="{Binding FontSize}"
+                                   TextWrapping="Wrap" Margin="0,1"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</Window>

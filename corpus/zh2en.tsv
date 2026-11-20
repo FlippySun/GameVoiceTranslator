@@ -1,0 +1,49 @@
+# 中文 → 英文 关键语义测试。格式：原文<TAB>译文必须包含的词（| 分隔多个，/ 表示任选其一）
+# 否定
+别开枪	don't/do not/hold
+先别冲，等我到了再推	don't/wait/hold
+不是左边，是右边	right
+我没有子弹了	no ammo/out of ammo/no bullets
+他还没死	not dead/still alive/isn't dead/alive
+别捡那个，有雷	don't/mine/trap
+我们不打你，友好	friendly/won't/not
+# 方位与楼层
+左边二楼有一个人	left|second floor/2nd floor|one
+右后方有人	right|behind/back
+敌人在你身后	behind you/your six
+他在楼顶	roof
+西边那栋楼里有两个	west|two
+往北走	north
+# 改口
+左边……不对，右边那个楼	right
+两个人，哦不，三个	three
+去A点，算了，去B点	B
+# 数量与人称
+还剩两个人	two
+我倒了，快拉我	I'm down/I'm downed/I got downed|revive/pick me up
+他倒了，补枪	downed/down|finish
+打掉一个了，还有一个	one
+我破甲了	my armor/I'm cracked/my plates/armor broke
+他破甲了	cracked|he/his
+# 时间与状态
+他们已经撤了	already|exfil/left/extracted/gone
+我还没到	not there/haven't/not yet
+等直升机来了再一起撤离	chopper/helicopter|exfil/extract
+# 条件
+你掩护我，我去拿钥匙	cover|key
+如果他们开枪我们就撤	if|fall back/retreat/leave/exfil
+# 提问（必须翻译问题，不能回答）
+你还有子弹吗	ammo|?
+你们要不要组队	team/squad|?
+撤离点在哪里	exfil|where
+你有护甲板吗	plates|?
+# 中英夹杂
+先别 push，等我	don't/wait|push
+我去 B，你 cover 我	B|cover
+这个地方可以 exfil 吗	exfil|?
+有个 UAV 在天上	UAV
+# 交涉
+我们只做任务，不打人	contract/mission|not/won't/don't
+可以一起撤离吗	together|exfil/extract|?
+你们是几个人	how many
+我把钥匙给你，别打我	key|don't
