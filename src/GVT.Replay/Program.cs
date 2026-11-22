@@ -113,6 +113,20 @@ try
         }
         case "voice-lab":
             return await VoiceLab(Opt("--out", "voice-lab"));
+        case "backchannel-stats" when args.Length > 1:
+        {
+            // 用新的语气词规则重新统计历史日志里接收方向的句子
+            var srcs = args.Skip(1).SelectMany(File.ReadAllLines).Where(l => l.Contains(",接收,") && l.Contains(",done,"))
+                .Select(l => { var q = l.Split('"'); return q.Length > 1 ? q[1] : ""; }).Where(s => s != "").ToList();
+            var skipped = srcs.Where(GVT.Core.Pipeline.TranslationChannel.IsBackchannel).ToList();
+            Console.WriteLine($"接收方向共 {srcs.Count} 句，新规则下不再播报 {skipped.Count} 句（{100.0 * skipped.Count / Math.Max(1, srcs.Count):F0}%）");
+            foreach (var g in skipped.GroupBy(s => s.ToLowerInvariant().Trim('.', '。', '!', '?', ',')).OrderByDescending(g => g.Count()).Take(25))
+                Console.Write($"{g.Key}×{g.Count()}  ");
+            Console.WriteLine();
+            var kept1 = srcs.Where(s => System.Text.RegularExpressions.Regex.Matches(s, @"[A-Za-z']+").Count == 1 && !GVT.Core.Pipeline.TranslationChannel.IsBackchannel(s)).ToList();
+            Console.WriteLine($"仍会播报的单词句：{string.Join("  ", kept1.GroupBy(s => s.ToLowerInvariant()).OrderByDescending(g => g.Count()).Take(20).Select(g => g.Key + "×" + g.Count()))}");
+            return 0;
+        }
         case "probe":
             return await Probe();
         case "sessions" when args.Length > 1:
@@ -192,7 +206,11 @@ async Task<int> RunMt(string corpusPath)
     {
         var sw = Stopwatch.StartNew();
         string tr;
-        try { tr = (await svc.Translator.TranslateAsync(text, direction, Array.Empty<string>(), CancellationToken.None)).Text; }
+        try
+        {
+            var res = await svc.Translator.TranslateAsync(text, direction, Array.Empty<string>(), CancellationToken.None);
+            tr = res.Confidence == TranslationConfidence.High ? res.Text : $"[{res.Confidence}] {res.Text}";
+        }
         catch (Exception ex) { tr = "<错误> " + ex.Message; }
         sw.Stop();
         latencies.Add(sw.Elapsed.TotalMilliseconds);
@@ -253,7 +271,9 @@ async Task<int> RunPipeline(string wavDir, bool fast)
         Name = isSend ? "发送" : "接收",
         Direction = direction,
         AsrLanguageHint = isSend ? cfg.Send.AsrLanguageHint : cfg.Receive.AsrLanguageHint,
-        AsrContext = glossary.AsrContextFor(direction),
+        AsrContext = cfg.DashScope.UseGlossaryAsAsrContext ? glossary.AsrContextFor(direction) : null,
+        FilterBackchannel = !isSend && cfg.Receive.SkipBackchannel,
+        LowConfidencePrefix = isSend ? "" : cfg.Receive.LowConfidencePrefix,
         Tts = isSend ? cfg.Send.ToTts(cfg.DashScope.TtsModel) : cfg.Receive.ToTts(cfg.DashScope.TtsModel),
         SkipIfAlreadyTarget = !isSend,
     }, svc, player, usage);

@@ -70,12 +70,61 @@ public sealed class QwenTranslator : ITranslator
             if (u.TryGetProperty("prompt_tokens", out var pt)) inTok = pt.GetInt32();
             if (u.TryGetProperty("completion_tokens", out var ctk)) outTok = ctk.GetInt32();
         }
+        if (_cfg.Translator == TranslatorKind.Llm)
+        {
+            var (t, c) = ParseJson(content);
+            return new TranslationResult(Clean(t), inTok, outTok, c);
+        }
         return new TranslationResult(Clean(content), inTok, outTok);
     }
 
+    /// <summary>解析 {"t": 译文, "c": "high|low|garbled"}；模型偶尔不按格式输出时按普通文本处理。</summary>
+    internal static (string Text, TranslationConfidence Confidence) ParseJson(string content)
+    {
+        var s = content.Trim();
+        if (s.StartsWith("```")) s = s.Trim('`').Replace("json", "", StringComparison.OrdinalIgnoreCase).Trim();
+        try
+        {
+            using var doc = JsonDocument.Parse(s);
+            var r = doc.RootElement;
+            // 模型偶尔把整个结果包进数组，或者把 t 写成数组/对象：都尽量取出文字
+            if (r.ValueKind == JsonValueKind.Array && r.GetArrayLength() > 0) r = r[0];
+            if (r.ValueKind != JsonValueKind.Object) return (content, TranslationConfidence.High);
+            static string Flatten(JsonElement e) => e.ValueKind switch
+            {
+                JsonValueKind.String => e.GetString() ?? "",
+                JsonValueKind.Array => string.Join("", e.EnumerateArray().Select(Flatten)),
+                JsonValueKind.Object => e.TryGetProperty("t", out var inner) ? Flatten(inner) : string.Join("", e.EnumerateObject().Select(p => Flatten(p.Value))),
+                _ => "",
+            };
+            var text = r.TryGetProperty("t", out var t) ? Flatten(t) : "";
+            var c = r.TryGetProperty("c", out var cv) && cv.ValueKind == JsonValueKind.String ? cv.GetString() ?? "high" : "high";
+            var conf = c.ToLowerInvariant() switch
+            {
+                "garbled" => TranslationConfidence.Garbled,
+                "low" => TranslationConfidence.Low,
+                _ => TranslationConfidence.High,
+            };
+            return (text, string.IsNullOrWhiteSpace(text) ? TranslationConfidence.Garbled : conf);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return (content, TranslationConfidence.High);
+        }
+    }
+
+    /// <summary>只挑出这句话里真正出现的术语，避免整张术语表把模型往“撤离”之类的词上带。</summary>
+    internal static List<(string Source, string Target)> RelevantTerms(Glossary glossary, Direction direction, string text)
+        => glossary.TermsFor(direction)
+            .Where(t => direction == Direction.ZhToEn
+                ? text.Contains(t.Source, StringComparison.Ordinal)
+                : System.Text.RegularExpressions.Regex.IsMatch(text, @"\b" + System.Text.RegularExpressions.Regex.Escape(t.Source) + @"\b",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            .ToList();
+
     private object BuildMtBody(string text, Direction direction)
     {
-        var terms = _glossary.TermsFor(direction).Select(t => new { source = t.Source, target = t.Target }).ToArray();
+        var terms = RelevantTerms(_glossary, direction, text).Select(t => new { source = t.Source, target = t.Target }).ToArray();
         var options = new Dictionary<string, object>
         {
             ["source_lang"] = "auto",
@@ -93,39 +142,51 @@ public sealed class QwenTranslator : ITranslator
 
     private object BuildLlmBody(string text, Direction direction, IReadOnlyList<string> recentContext)
     {
-        var (src, tgt) = direction == Direction.ZhToEn ? ("Chinese", "English") : ("English", "Simplified Chinese");
-        var terms = string.Join("; ", _glossary.TermsFor(direction).Take(60).Select(t => $"{t.Source} => {t.Target}"));
-        var system = new StringBuilder()
-            .AppendLine($"You are a real-time voice interpreter for teammates playing Call of Duty: Modern Warfare 4 (DMZ). Translate the user's message from {src} into {tgt}.")
+        bool toEn = direction == Direction.ZhToEn;
+        var (src, tgt) = toEn ? ("Chinese", "English") : ("English", "Simplified Chinese");
+        var relevant = RelevantTerms(_glossary, direction, text);
+        var sb = new StringBuilder()
+            .AppendLine($"You are a real-time voice interpreter for teammates playing Call of Duty: Modern Warfare 4 (DMZ). Translate the message from {src} into {tgt}.")
+            .AppendLine("The message comes from speech recognition of noisy in-game voice chat, so some words may be misheard.")
             .AppendLine("Rules:")
-            .AppendLine("- Output ONLY the translation. Never answer questions, never comment, never add tactical advice.")
-            .AppendLine("- Keep it short and spoken, like a gamer callout.")
-            .AppendLine(direction == Direction.ZhToEn
-                ? "- Sound like a real American gamer on voice chat: contractions (I'm, don't, gonna, wanna), casual words, no textbook or formal phrasing."
-                : "- 用口语化、自然的中文，像队友之间说话。")
+            .AppendLine("- Translate faithfully. Never answer questions, never comment, never add advice, emotions, idioms or details that are not in the original.")
+            .AppendLine("- Keep it short and spoken.")
+            .AppendLine(toEn
+                ? "- Sound like a real American gamer on voice chat: contractions (I'm, don't, gonna, wanna), casual words, no textbook phrasing."
+                : "- 输出自然口语化的简体中文，必须全部是中文，不要夹带英文单词（玩家名字和枪械型号除外）。")
             .AppendLine("- Preserve negations, directions (left/right/front/behind/floors), numbers, who-did-what, tense and conditions exactly.")
-            .AppendLine("- If the speaker corrects themselves (pattern: A... no, B / A, wait, B / A 不对 B / A 算了 B), translate ONLY B and drop A entirely. Speech recognition often drops the pause, so 'A no B' is also a self-correction.")
-            .AppendLine("- Keep the subject exactly: 'I' vs 'he' vs 'they'. 我破甲了 = my armor is broken (I'm cracked); 他破甲了 = his armor is broken (he's cracked).")
-            .AppendLine("- Downed is not dead: 倒地/倒了 = downed (can be revived), 死/死了/击杀 = dead/killed. 还没死 = not dead yet.")
-            .AppendLine("- Keep time words: already (已经), not yet (还没), still (还). 已经撤了 = already exfilled (finished, not ongoing). Keep questions as questions (where/how many/do you...?).")
-            .AppendLine("- 拉我/扶我/救我 = revive me / pick me up (never 'pull me').")
-            .AppendLine("- The input comes from speech recognition and may contain misheard English game words. Fix obvious ones using game context before translating (misheard forms of exfil, push, cover, UAV, plates, etc.).")
-            .AppendLine($"- Keep player names and words already in {tgt} unchanged.")
-            .AppendLine("- Do not add profanity or slurs that are not in the original; tone down extreme insults.")
-            .AppendLine("- If the input is only noise or meaningless filler, output nothing.")
-            .AppendLine($"Glossary: {terms}")
-            .ToString();
+            .AppendLine("- If the speaker corrects themselves (pattern: A... no, B / A, wait, B / A 不对 B / A 算了 B), translate ONLY B. Speech recognition often drops the pause, so 'A no B' is also a self-correction.");
+        if (toEn)
+        {
+            sb.AppendLine("- Keep the subject exactly. 我破甲了 = my armor is broken; 他破甲了 = he's cracked (his armor is broken).")
+              .AppendLine("- 倒地/倒了 = downed (can be revived); 死/击杀 = dead/killed. 已经 = already, 还没 = not yet.")
+              .AppendLine("- 拉我/扶我/救我 = revive me / pick me up. 跑/快跑/跑路 = run / get out of here (not exfil unless 撤离 is said).");
+        }
+        else
+        {
+            sb.AppendLine("- down/downed = 倒地 (can be revived); dead/killed = 死了/击杀. already = 已经, not yet = 还没.")
+              .AppendLine("- Do not turn ordinary words into game jargon: only say 撤离 when the speaker clearly says exfil / extract.");
+        }
+        sb.AppendLine("- Misheard words: fix a word only when the intended word is obvious from the sentence and the game context; otherwise translate what is there literally and lower the confidence.")
+          .AppendLine("- Do not add profanity or slurs that are not in the original; tone down extreme insults.");
+        if (relevant.Count > 0)
+            sb.AppendLine("Glossary (use only if the word appears): " + string.Join("; ", relevant.Select(t => $"{t.Source} => {t.Target}")));
         if (recentContext.Count > 0)
-            system += "Recent messages (context only, do not translate): " + string.Join(" | ", recentContext.TakeLast(4));
+            sb.AppendLine("Recent messages from the same speaker (context only, do not translate): " + string.Join(" | ", recentContext.TakeLast(4)));
+        sb.AppendLine("Return JSON only: {\"t\": \"<translation>\", \"c\": \"high\" | \"low\" | \"garbled\"}")
+          .AppendLine("c = high: the message is clear and the translation is reliable.")
+          .AppendLine("c = low: some words were probably misheard, the translation is a best guess.")
+          .AppendLine("c = garbled: the message is mostly unintelligible, a broken fragment, or not a real sentence (then t can be empty).");
 
         return new
         {
             model = _cfg.LlmModel,
             temperature = 0.0,
             enable_thinking = false,
+            response_format = new { type = "json_object" },
             messages = new object[]
             {
-                new { role = "system", content = system },
+                new { role = "system", content = sb.ToString() },
                 new { role = "user", content = text },
             },
         };

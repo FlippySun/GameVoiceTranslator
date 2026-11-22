@@ -1,8 +1,9 @@
 {
   "Entries": [
-    { "Zh": "撤离", "En": "exfil", "ZhAliases": [ "跑路" ], "EnAliases": [ "extract", "extraction" ], "Note": "DMZ 核心动作" },
+    { "Zh": "撤离", "En": "exfil", "ZhAliases": [], "EnAliases": [ "extract", "extraction" ], "Note": "DMZ 核心动作" },
     { "Zh": "撤离点", "En": "exfil point", "ZhAliases": [ "撤离区" ], "EnAliases": [ "exfil zone", "extraction point" ] },
-    { "Zh": "撤离直升机", "En": "exfil chopper", "ZhAliases": [ "直升机" ], "EnAliases": [ "exfil helo", "chopper" ] },
+    { "Zh": "撤离直升机", "En": "exfil chopper", "ZhAliases": [], "EnAliases": [ "exfil helo" ] },
+    { "Zh": "直升机", "En": "chopper", "ZhAliases": [], "EnAliases": [ "helo", "helicopter" ] },
     { "Zh": "破甲", "En": "armor broken", "ZhAliases": [ "甲碎了", "碎甲" ], "EnAliases": [ "cracked", "broke his plates" ], "Note": "COD 常用报点：对方护甲被打碎" },
     { "Zh": "一枪", "En": "one shot", "ZhAliases": [ "残血", "一丝血" ], "EnAliases": [ "one-shot", "he's weak" ] },
     { "Zh": "倒地", "En": "downed", "ZhAliases": [ "倒了", "趴了" ], "EnAliases": [ "down", "knocked" ] },

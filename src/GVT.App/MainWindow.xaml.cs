@@ -82,7 +82,8 @@ public partial class MainWindow : Window
         LoadDevices();
         ShowGuide("MW4");
         (_cfg.Send.Gate == GateMode.PushToTalk ? GatePtt : GateVad).IsChecked = true;
-        (_cfg.DashScope.Translator == TranslatorKind.Llm ? TrLlm : TrMt).IsChecked = true;
+        (_cfg.DashScope.Translator == TranslatorKind.Mt ? TrMt : _cfg.DashScope.LlmModel == "qwen3.8-flash" ? TrLlmPlus : TrLlm).IsChecked = true;
+        SaveAudioCheck.IsChecked = _cfg.Debug.SaveUtteranceAudio;
         (_cfg.Receive.ListenMode == ReceiveListenMode.Both ? ListenBoth : ListenFirst).IsChecked = true;
         LoadVoices();
         LoadOverlaySettings();
@@ -299,6 +300,7 @@ public partial class MainWindow : Window
         _cfg.Receive.HeadphoneDevice = Picked(HeadphoneCombo);
         _cfg.Send.Gate = GateVad.IsChecked == true ? GateMode.VoiceActivity : GateMode.PushToTalk;
         _cfg.DashScope.Translator = TrMt.IsChecked == true ? TranslatorKind.Mt : TranslatorKind.Llm;
+        _cfg.DashScope.LlmModel = TrLlmPlus.IsChecked == true ? "qwen3.8-flash" : "qwen-flash";
         _cfg.Save();
     }
 
@@ -772,6 +774,13 @@ public partial class MainWindow : Window
             LogList.ItemsSource = _logLines;
             LogScroll.ScrollToEnd();
         }
+    }
+
+    private void SaveAudio_Click(object sender, RoutedEventArgs e)
+    {
+        _cfg.Debug.SaveUtteranceAudio = SaveAudioCheck.IsChecked == true;
+        _cfg.Save();
+        Toast(_cfg.Debug.SaveUtteranceAudio ? "下次开始翻译时会保存识别音频" : "已关闭保存识别音频");
     }
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)

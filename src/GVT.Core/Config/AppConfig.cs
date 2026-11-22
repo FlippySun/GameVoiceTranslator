@@ -16,6 +16,7 @@ public sealed class AppConfig
     public VadConfig Vad { get; set; } = new();
     public BudgetConfig Budget { get; set; } = new();
     public OverlayConfig Overlay { get; set; } = new();
+    public DebugConfig Debug { get; set; } = new();
     /// <summary>音色设计 / 声音复刻得到的自定义音色。</summary>
     public List<CustomVoiceConfig> CustomVoices { get; set; } = new();
 
@@ -85,6 +86,8 @@ public sealed class DashScopeConfig
     public string LlmModel { get; set; } = "qwen-flash";
 
     public int RequestTimeoutMs { get; set; } = 8000;
+    /// <summary>把术语表作为识别上下文传给识别服务。实测听不清时模型会把术语表原样吐出来（“撤离，跑路，撤离点……”），默认关闭。</summary>
+    public bool UseGlossaryAsAsrContext { get; set; } = false;
 
     /// <summary>可选：直接指定 WebSocket 地址（如千问AI平台 wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference）。</summary>
     public string WebSocketUrlOverride { get; set; } = "";
@@ -104,6 +107,12 @@ public sealed class DashScopeConfig
     public string CompatibleBaseUrl => !string.IsNullOrWhiteSpace(CompatibleBaseUrlOverride) ? CompatibleBaseUrlOverride : string.IsNullOrWhiteSpace(WorkspaceId)
         ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
         : $"https://{WorkspaceId}.{Region}.maas.aliyuncs.com/compatible-mode/v1";
+}
+
+public sealed class DebugConfig
+{
+    /// <summary>把每句识别用的音频和识别结果存到 logs\utterances，用来对比、改进识别模型。只存在本机。</summary>
+    public bool SaveUtteranceAudio { get; set; } = false;
 }
 
 public sealed class CustomVoiceConfig
@@ -161,6 +170,10 @@ public sealed class ReceiveConfig
     public TtsVoice ToTts(string fallbackModel) => VoiceCatalog.Resolve(Voice, TtsRate, Style, CustomInstruction, fallbackModel, "zh");
     public float TranslationVolume { get; set; } = 1.0f;
     public ReceiveListenMode ListenMode { get; set; } = ReceiveListenMode.TranslationFirst;
+    /// <summary>yeah / okay / yep 这类附和语气词和不成句的单个词只显示字幕，不播报。</summary>
+    public bool SkipBackchannel { get; set; } = true;
+    /// <summary>翻译模型没把握时在中文播报前加的提示。</summary>
+    public string LowConfidencePrefix { get; set; } = "可能是，";
 
     public float OriginalGainTranslationFirst { get; set; } = 0.35f;
     public float OriginalGainTranslationFirstDucked { get; set; } = 0.12f;

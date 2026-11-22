@@ -19,6 +19,12 @@ public sealed class ChannelOptions
     public bool FollowPan { get; init; }
     /// <summary>识别结果已经是目标语言（例如队友里有人说中文）时，只显示字幕、不播报。</summary>
     public bool SkipIfAlreadyTarget { get; init; }
+    /// <summary>只是附和的语气词（yeah/okay/yep…）和不成句的单个词只显示字幕、不播报。</summary>
+    public bool FilterBackchannel { get; init; }
+    /// <summary>翻译模型自评“没把握”时，播报前加的前缀（如“可能是，”）。空 = 不加。</summary>
+    public string LowConfidencePrefix { get; init; } = "";
+    /// <summary>非空时把每句识别用的音频和识别结果保存到这个目录（调试用）。</summary>
+    public string? SaveAudioDir { get; init; }
 }
 
 public enum ChannelStage { Off, Idle, Listening, Processing, Speaking, Error }
@@ -94,6 +100,7 @@ public sealed class TranslationChannel
         {
             if (_current != null) EndUtteranceLocked();
             u = new Utterance(Interlocked.Increment(ref _nextId), Epoch, _epochCts.Token);
+            if (_opt.SaveAudioDir != null) u.Recorded = new List<float>();
             try
             {
                 u.Asr = _services.StartAsr(_opt.AsrLanguageHint, _opt.AsrContext);
@@ -105,6 +112,7 @@ public sealed class TranslationChannel
             }
             u.Asr.Partial += t => Emit(u.Id, SubtitleKind.Partial, t);
             u.Asr.Push(preRoll16k);
+            u.Recorded?.AddRange(preRoll16k.ToArray());
             _current = u;
         }
         SetStage(ChannelStage.Listening);
@@ -117,6 +125,7 @@ public sealed class TranslationChannel
             var u = _current;
             if (u == null) return;
             u.Asr?.Push(samples16k);
+            u.Recorded?.AddRange(samples16k.ToArray());
             float energy = 0;
             foreach (var s in samples16k) energy += s * s;
             u.PanSum += pan * energy;
@@ -194,6 +203,7 @@ public sealed class TranslationChannel
             }
             rec.EndToAsrMs = MsSinceEnd(u);
             rec.Source = source;
+            if (u.Recorded != null) SaveRecording(u, source);
             if (IsStale(u)) { Drop(slot, rec, "cancelled"); return; }
 
             if (IsNoise(source)) { Drop(slot, rec, "empty"); return; }
@@ -211,6 +221,12 @@ public sealed class TranslationChannel
                 Drop(slot, rec, "already-target");
                 return;
             }
+            if (_opt.FilterBackchannel && IsBackchannel(source))
+            {
+                Emit(u.Id, SubtitleKind.Info, "语气词，不播报");
+                Drop(slot, rec, "backchannel");
+                return;
+            }
 
             var context = RecentContext(source);
             var tr = await _services.Translator.TranslateAsync(source, _opt.Direction, context, u.Token).ConfigureAwait(false);
@@ -218,23 +234,31 @@ public sealed class TranslationChannel
             rec.EndToMtMs = MsSinceEnd(u);
             rec.Translation = tr.Text;
             if (IsStale(u)) { Drop(slot, rec, "cancelled"); return; }
+            if (tr.Confidence == TranslationConfidence.Garbled)
+            {
+                Emit(u.Id, SubtitleKind.Dropped, _opt.Direction == Direction.EnToZh ? "没听清，未播报" : "没听清，未发送，请再说一遍");
+                Drop(slot, rec, "garbled");
+                return;
+            }
             if (string.IsNullOrWhiteSpace(tr.Text)) { Drop(slot, rec, "empty-translation"); return; }
+            var spoken = tr.Confidence == TranslationConfidence.Low && !string.IsNullOrEmpty(_opt.LowConfidencePrefix)
+                ? _opt.LowConfidencePrefix + tr.Text : tr.Text;
 
-            slot.Text = tr.Text;
+            slot.Text = spoken;
             if (_opt.FollowPan && u.EnergySum > 1e-6f) slot.Pan = Math.Clamp(u.PanSum / u.EnergySum, -0.8f, 0.8f);
-            Emit(u.Id, SubtitleKind.Translation, tr.Text);
+            Emit(u.Id, SubtitleKind.Translation, spoken);
             Translated?.Invoke(tr.Text);
 
             if (_opt.LeadInMs > 0) _player.Append(slot, LeadIn(_services.TtsSampleRate));
 
             bool first = true;
-            int chars = await tts.SpeakAsync(tr.Text, pcm =>
+            int chars = await tts.SpeakAsync(spoken, pcm =>
             {
                 if (IsStale(u)) return;
                 if (first) { first = false; rec.EndToTtsFirstMs = MsSinceEnd(u); }
                 _player.Append(slot, pcm);
             }, u.Token).ConfigureAwait(false);
-            _usage.AddTts(chars > 0 ? chars : TextUtil.TtsChars(tr.Text));
+            _usage.AddTts(chars > 0 ? chars : TextUtil.TtsChars(spoken));
 
             if (IsStale(u)) { Drop(slot, rec, "cancelled"); return; }
             _player.Complete(slot);
@@ -291,6 +315,24 @@ public sealed class TranslationChannel
             SetStage(IsCapturing ? ChannelStage.Listening : ChannelStage.Idle);
     }
 
+    private void SaveRecording(Utterance u, string recognized)
+    {
+        var samples = u.Recorded!.ToArray();
+        var dir = _opt.SaveAudioDir!;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+                var name = $"{DateTime.Now:yyyyMMdd-HHmmss}-{(_opt.Direction == Direction.EnToZh ? "recv" : "send")}-{u.Id}";
+                using (var w = new NAudio.Wave.WaveFileWriter(Path.Combine(dir, name + ".wav"), new NAudio.Wave.WaveFormat(16000, 16, 1)))
+                    w.Write(PcmConvert.FloatToPcm16(samples));
+                File.WriteAllText(Path.Combine(dir, name + ".txt"), recognized);
+            }
+            catch (Exception ex) { Log.Warn("保存识别音频失败：" + ex.Message); }
+        });
+    }
+
     private List<string> RecentContext(string source)
     {
         lock (_recentSource)
@@ -313,6 +355,36 @@ public sealed class TranslationChannel
         "hmm", "hm", "mm", "mmm", "uh", "um", "uhm", "er", "erm", "ah", "eh", "oh", "huh", "ha",
         "嗯", "啊", "呃", "哦", "额", "唉", "哈", "嗯嗯", "啊啊",
     };
+
+    private static readonly HashSet<string> Backchannel = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "yeah", "yea", "ya", "yep", "yup", "yes", "yeh", "ok", "okay", "alright", "right", "sure", "cool", "nice", "good", "great",
+        "awesome", "perfect", "excellent", "sweet", "thanks", "thank", "you", "sir", "no", "nope", "nah", "oh", "ah", "well", "so",
+        "but", "the", "and", "a", "um", "uh", "em", "er", "hmm", "mm", "wow", "what", "huh", "haha", "lol", "bro", "dude", "man",
+        "damn", "gg", "exactly", "true", "copy", "that", "roger", "got", "it", "my", "god", "gosh", "lets", "let's", "go", "hey",
+        "hi", "hello", "yo", "hell", "jesus", "okay.", "mhm", "uhh", "ohh", "hmm.", "is", "this", "thing",
+    };
+
+    /// <summary>单个词时只有这些战术词才值得播报（其余单词多半是半截话或听错）。</summary>
+    private static readonly HashSet<string> Tactical = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "behind", "left", "right", "front", "back", "up", "down", "upstairs", "downstairs", "roof", "rooftop", "sniper", "snipers",
+        "enemy", "enemies", "contact", "reloading", "reload", "cracked", "help", "revive", "wait", "stop", "go", "push", "pushing",
+        "run", "hold", "cover", "here", "there", "north", "south", "east", "west", "grenade", "nade", "uav", "chopper", "helicopter",
+        "exfil", "extract", "plates", "ammo", "medic", "car", "truck", "boat", "gas", "mine", "mines", "trap", "careful", "watch",
+        "moving", "coming", "rushing", "flank", "flanking", "hurry", "fall", "retreat", "downed", "dead", "two", "three", "four",
+        "five", "drone", "bomb", "boss", "juggernaut", "hostile", "hostiles", "friendly", "friendlies", "don't", "shoot",
+    };
+
+    /// <summary>附和类语气词（yeah / okay / thank you sir / oh my god…）或不成句的单个词：只显示字幕，不播报。</summary>
+    internal static bool IsBackchannel(string text)
+    {
+        var words = System.Text.RegularExpressions.Regex.Matches(text.ToLowerInvariant(), @"[a-z']+").Select(m => m.Value).ToList();
+        if (words.Count == 0) return false;
+        if (words.Count == 1) return !Tactical.Contains(words[0]);
+        // “go right”“yeah behind”之类含方向/战术词的不算语气词（“let's go”除外）
+        return words.Count <= 4 && words.All(Backchannel.Contains) && !words.Any(w => w != "go" && Tactical.Contains(w));
+    }
 
     /// <summary>空内容、纯标点或纯语气词（hmm、uh、嗯、呃……）不翻译也不播报。</summary>
     internal static bool IsNoise(string text)
@@ -351,5 +423,6 @@ public sealed class TranslationChannel
         public long EndTicks { get; set; }
         public float PanSum { get; set; }
         public float EnergySum { get; set; }
+        public List<float>? Recorded { get; set; }
     }
 }

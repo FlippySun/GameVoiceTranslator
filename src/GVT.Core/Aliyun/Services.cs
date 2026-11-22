@@ -23,7 +23,9 @@ public interface ITtsSession : IAsyncDisposable
     Task CancelAsync();
 }
 
-public sealed record TranslationResult(string Text, int InputTokens, int OutputTokens);
+public enum TranslationConfidence { High, Low, Garbled }
+
+public sealed record TranslationResult(string Text, int InputTokens, int OutputTokens, TranslationConfidence Confidence = TranslationConfidence.High);
 
 public interface ITranslator
 {

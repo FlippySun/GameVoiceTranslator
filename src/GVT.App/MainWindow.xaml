@@ -534,11 +534,12 @@
                                 <TextBlock Text="翻译引擎" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
                                 <Border Style="{StaticResource SegmentHost}">
                                     <StackPanel Orientation="Horizontal">
-                                        <RadioButton x:Name="TrLlm" Style="{StaticResource Segment}" GroupName="Tr" Content="qwen-flash（推荐）"/>
+                                        <RadioButton x:Name="TrLlm" Style="{StaticResource Segment}" GroupName="Tr" Content="快（qwen-flash，推荐）"/>
+                                        <RadioButton x:Name="TrLlmPlus" Style="{StaticResource Segment}" GroupName="Tr" Content="更准（qwen3.8-flash，慢约 0.35 秒）"/>
                                         <RadioButton x:Name="TrMt" Style="{StaticResource Segment}" GroupName="Tr" Content="qwen-mt-flash"/>
                                     </StackPanel>
                                 </Border>
-                                <TextBlock Text="这两项在下次点“开始”时生效。实测 qwen-flash 处理改口、主语和时态更准。" Style="{StaticResource T.Caption}" Margin="0,10,0,0"/>
+                                <TextBlock Text="这两项在下次点“开始”时生效。“更准”更善于察觉听错的句子（标成“可能是”或不播报），但每句多等约 0.35 秒。" Style="{StaticResource T.Caption}" Margin="0,10,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -741,6 +742,9 @@
                         <StackPanel>
                             <TextBlock Text="诊断与日志" Style="{StaticResource T.H1}"/>
                             <TextBlock x:Name="DiagSummary" Text="每句话从说完到各阶段完成的耗时（毫秒）。" Style="{StaticResource T.Body}" Margin="0,6,0,0"/>
+                            <CheckBox x:Name="SaveAudioCheck" Style="{StaticResource Toggle}" Margin="0,12,0,0" Click="SaveAudio_Click">
+                                <TextBlock Foreground="{StaticResource B.Text}" TextWrapping="Wrap" MaxWidth="620"><Run Text="保存识别音频（用于改进识别）"/><Run Text="  把每句话的录音和识别结果存到日志文件夹的 utterances 里，只保存在本机。下次点“开始”生效。" Foreground="{StaticResource B.Text3}" FontSize="12"/></TextBlock>
+                            </CheckBox>
                         </StackPanel>
                     </DockPanel>
                     <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16,12,6,8">

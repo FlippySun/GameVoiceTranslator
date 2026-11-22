@@ -77,3 +77,43 @@ public class FillerTests
     public void SkipsFillerOnlyUtterances(string text, bool noise)
         => Assert.Equal(noise, GVT.Core.Pipeline.TranslationChannel.IsNoise(text));
 }
+
+public class RecognitionQualityTests
+{
+    [Theory]
+    [InlineData("yeah", true)]
+    [InlineData("Okay.", true)]
+    [InlineData("thank you sir", true)]
+    [InlineData("oh my god", true)]
+    [InlineData("let's go", true)]
+    [InlineData("the", true)]
+    [InlineData("prison", true)]
+    [InlineData("behind", false)]
+    [InlineData("Sniper!", false)]
+    [InlineData("go right", false)]
+    [InlineData("yeah, behind you", false)]
+    [InlineData("two on the left", false)]
+    [InlineData("where is he", false)]
+    public void Backchannel_SkipsFillersAndFragments_KeepsCallouts(string text, bool skip)
+        => Assert.Equal(skip, GVT.Core.Pipeline.TranslationChannel.IsBackchannel(text));
+
+    [Fact]
+    public void ParseJson_ReadsConfidence()
+    {
+        var (t, c) = GVT.Core.Aliyun.QwenTranslator.ParseJson("{\"t\":\"可能是钥匙\",\"c\":\"low\"}");
+        Assert.Equal("可能是钥匙", t);
+        Assert.Equal(GVT.Core.Aliyun.TranslationConfidence.Low, c);
+        Assert.Equal(GVT.Core.Aliyun.TranslationConfidence.Garbled, GVT.Core.Aliyun.QwenTranslator.ParseJson("{\"t\":\"\",\"c\":\"high\"}").Confidence);
+        Assert.Equal(("plain text", GVT.Core.Aliyun.TranslationConfidence.High), GVT.Core.Aliyun.QwenTranslator.ParseJson("plain text"));
+    }
+
+    [Fact]
+    public void RelevantTerms_OnlyIncludesWordsInTheSentence()
+    {
+        var g = new Glossary { Entries = { new GlossaryEntry { Zh = "撤离", En = "exfil" }, new GlossaryEntry { Zh = "破甲", En = "armor broken", EnAliases = { "cracked" } } } };
+        Assert.Empty(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.ZhToEn, "左边二楼有两个人"));
+        Assert.Single(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.ZhToEn, "他破甲了"));
+        Assert.Single(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.EnToZh, "He's cracked, push"));
+        Assert.Empty(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.EnToZh, "exfiltration"));
+    }
+}

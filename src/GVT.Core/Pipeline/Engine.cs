@@ -112,10 +112,11 @@ public sealed class Engine : IDisposable
             Name = "发送",
             Direction = Direction.ZhToEn,
             AsrLanguageHint = c.AsrLanguageHint,
-            AsrContext = _glossary.AsrContextFor(Direction.ZhToEn),
+            AsrContext = _cfg.DashScope.UseGlossaryAsAsrContext ? _glossary.AsrContextFor(Direction.ZhToEn) : null,
             Tts = c.ToTts(_cfg.DashScope.TtsModel),
             LeadInMs = c.LeadInMs,
             LeadInLevel = c.LeadInLevel,
+            SaveAudioDir = _cfg.Debug.SaveUtteranceAudio ? Path.Combine(Log.LogDirectory, "utterances") : null,
         }, _services, player, _usage) { Enabled = c.Enabled };
         Wire(Send);
         Send.Translated += _echo.AddOutgoing;
@@ -166,10 +167,13 @@ public sealed class Engine : IDisposable
             Name = "接收",
             Direction = Direction.EnToZh,
             AsrLanguageHint = c.AsrLanguageHint,
-            AsrContext = _glossary.AsrContextFor(Direction.EnToZh),
+            AsrContext = _cfg.DashScope.UseGlossaryAsAsrContext ? _glossary.AsrContextFor(Direction.EnToZh) : null,
             Tts = c.ToTts(_cfg.DashScope.TtsModel),
             FollowPan = c.FollowSourcePan,
             SkipIfAlreadyTarget = true,
+            FilterBackchannel = c.SkipBackchannel,
+            SaveAudioDir = _cfg.Debug.SaveUtteranceAudio ? Path.Combine(Log.LogDirectory, "utterances") : null,
+            LowConfidencePrefix = c.LowConfidencePrefix,
         }, _services, player, _usage) { Enabled = c.Enabled };
         Wire(Receive);
         Receive.ShouldDropSource = _echo.IsEcho;
