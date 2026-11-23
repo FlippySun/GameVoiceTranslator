@@ -115,6 +115,12 @@ try
             return await AsrAb.RunAsync(cfg, Glossary.Load(cfg.ResolveGlossaryPath()), SecretStore.GetApiKey()!, args[1],
                 Opt("--variants", "").Split(',', StringSplitOptions.RemoveEmptyEntries), int.Parse(Opt("--limit", "100000")),
                 int.Parse(Opt("--realtime", "0")), Opt("--out", "asr-ab.tsv"));
+        case "env-check":
+        {
+            var issues = GVT.Core.Setup.EnvironmentCheck.Run(cfg, SecretStore.HasApiKey);
+            Console.WriteLine(issues.Count == 0 ? "开始前检查：全部通过" : string.Join(Environment.NewLine, issues.Select(i => $"[{i.Fix}] {i.Title}：{i.Detail}")));
+            return 0;
+        }
         case "vocab-list":
             foreach (var p in new[] { "gvtzh", "gvten" })
                 Console.WriteLine(p + ": " + string.Join(", ", await AsrVocabulary.ListAsync(cfg.DashScope, SecretStore.GetApiKey()!, p)));

@@ -533,4 +533,47 @@
         <Setter Property="BorderBrush" Value="{StaticResource B.BorderStrong}"/>
         <Setter Property="Padding" Value="8,5"/>
     </Style>
+    <!-- ============ 浮层卡片（提示卡、对话框、弹出面板） ============ -->
+    <DropShadowEffect x:Key="FloatShadow" BlurRadius="36" ShadowDepth="10" Direction="270" Opacity="0.55" Color="#000000"/>
+    <Style x:Key="FloatCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource B.Surface2}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource B.BorderStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="Padding" Value="18"/>
+        <Setter Property="Effect" Value="{StaticResource FloatShadow}"/>
+    </Style>
+
+    <!-- 可选卡片（单选）：选中时描边变成品牌色 -->
+    <Style x:Key="ChoiceCard" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource B.Text}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" Background="{StaticResource B.Surface}" BorderBrush="{StaticResource B.Border}" BorderThickness="1.5" CornerRadius="12" Padding="14,12">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Left" Width="18" Height="18" VerticalAlignment="Top" Margin="0,1,12,0">
+                                <Ellipse x:Name="Ring" Stroke="{StaticResource B.BorderStrong}" StrokeThickness="1.5"/>
+                                <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{StaticResource B.Brand}" Visibility="Collapsed"/>
+                            </Grid>
+                            <ContentPresenter/>
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource B.Surface3}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource B.Me}"/>
+                            <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource B.Me}"/>
+                            <Setter TargetName="Dot" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

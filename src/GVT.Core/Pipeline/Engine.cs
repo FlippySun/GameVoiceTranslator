@@ -359,11 +359,18 @@ public sealed class Engine : IDisposable
     public void ExtendBudget(double yuan)
     {
         _usage.ExtraBudgetYuan += yuan;
+        ResumeIfBudgetAllows();
+    }
+
+    /// <summary>上限被调高（或改成不限）后，如果之前因为预算暂停了，就恢复。</summary>
+    public void ResumeIfBudgetAllows()
+    {
+        if (!BudgetPaused || _usage.OverBudget) return;
         BudgetPaused = false;
         _warning = "";
         if (Send != null) Send.Enabled = _sendBeforePause;
         if (Receive != null) Receive.Enabled = _recvBeforePause;
-        Log.Info($"预算追加 ¥{yuan:F0}，现在 ¥{_usage.BudgetYuan:F0}");
+        Log.Info(_usage.Unlimited ? "花费上限已改为不限，继续翻译" : $"花费上限现在是 ¥{_usage.BudgetYuan:F0}，继续翻译");
         StatusChanged?.Invoke();
     }
 

@@ -44,7 +44,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _cfg = cfg;
-        _timeline.RecentMax = cfg.Overlay.MaxLines;
+        // 浮窗条目不再按条数截断：浮窗多高就显示多少，放不下的旧条目从顶上滚出去。这里只是防止无限增长
+        _timeline.RecentMax = 40;
         _overlay = new OverlayWindow(cfg, _timeline);
         _overlay.StyleChanged += () => Dispatcher.BeginInvoke(SyncOverlayStyle);
         _overlay.EditModeChanged += editing => Dispatcher.BeginInvoke(() =>
@@ -62,7 +63,7 @@ public partial class MainWindow : Window
 
         Log.Line += line => Dispatcher.BeginInvoke(() => AddLog(line));
         Loaded += OnLoaded;
-        Closing += (_, _) => Shutdown();
+        Closing += OnWindowClosing;
         StateChanged += (_, _) =>
         {
             MaxBtn.Content = WindowState == WindowState.Maximized ? "" : "";
@@ -88,6 +89,7 @@ public partial class MainWindow : Window
         LoadVoices();
         LoadOverlaySettings();
         LoadHotkeys();
+        InitShell();
         UpdateHero();
         _loading = false;
 
@@ -128,6 +130,7 @@ public partial class MainWindow : Window
         if (args_EditOverlay()) { _overlay.SetEditMode(true); await Task.Delay(400); }
         SavePng(_overlay, System.IO.Path.Combine(dir, "float.png"));
         if (_overlay.Toolbar is { IsVisible: true } tb) SavePng(tb, System.IO.Path.Combine(dir, "toolbar.png"));
+        await ShootShellAsync(dir);
         Close();
     }
 
@@ -203,10 +206,10 @@ public partial class MainWindow : Window
             Fill(SendOutCombo, render, _cfg.Send.OutputDevice);
             Fill(SourceCombo, capture, _cfg.Receive.SourceDevice);
             Fill(HeadphoneCombo, render, _cfg.Receive.HeadphoneDevice);
-            bool a = render.Any(n => n.Contains("VB-Audio Virtual Cable", StringComparison.OrdinalIgnoreCase));
-            bool b = capture.Any(n => n.Contains("VB-Audio Hi-Fi Cable", StringComparison.OrdinalIgnoreCase));
-            SetChip(CableAChip, CableAText, a, "VB-CABLE（发送）已安装", "未检测到 VB-CABLE");
-            SetChip(CableBChip, CableBText, b, "Hi-Fi Cable（接收）已安装", "未检测到 Hi-Fi Cable");
+            var drivers = GVT.Core.Setup.EnvironmentCheck.Drivers(render, capture);
+            SetChip(CableAChip, CableAText, drivers.SendCable, "VB-CABLE（发送）已安装", "未检测到 VB-CABLE");
+            SetChip(CableBChip, CableBText, drivers.RecvCable, "Hi-Fi Cable（接收）已安装", "未检测到 Hi-Fi Cable");
+            UpdateEnvStatus(drivers);
         }
         catch (Exception ex)
         {
@@ -247,7 +250,7 @@ public partial class MainWindow : Window
         Toast($"预算已加到 ¥{_engine.Usage.BudgetYuan:F0}，继续翻译");
     }
 
-    private void RefreshDevices_Click(object sender, RoutedEventArgs e) { LoadDevices(); Toast("设备列表已刷新"); }
+    private void RefreshDevices_Click(object sender, RoutedEventArgs e) { _loading = true; LoadDevices(); _loading = false; RecheckNotice(); Toast("设备列表已刷新"); }
 
     private void SaveKey_Click(object sender, RoutedEventArgs e)
     {
@@ -258,12 +261,19 @@ public partial class MainWindow : Window
         Toast("API Key 已加密保存");
     }
 
-    private void UpdateKeyStatus()
+    private void UpdateKeyStatus(bool? forceHas = null)
     {
-        bool has = SecretStore.HasApiKey;
+        bool has = forceHas ?? SecretStore.HasApiKey;
         KeyChip.Background = (Brush)FindResource(has ? "B.OkSoft" : "B.DangerSoft");
         KeyChipText.Foreground = (Brush)FindResource(has ? "B.Ok" : "B.Danger");
         KeyChipText.Text = has ? "✓  已保存" : "未设置";
+        // 没配置时，把状态标签换成直达阿里云百炼创建 Key 页面的按钮
+        KeyChip.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+        CreateKeyBtn.Visibility = has ? Visibility.Collapsed : Visibility.Visible;
+        KeyHint.Text = has
+            ? "使用“按量付费”的 Key（sk-ws- 开头）。用 Windows 当前用户加密保存在本机，不会以明文写入磁盘。"
+            : "还没有配置。点右侧按钮打开阿里云百炼，登录后创建一个“按量付费”的 Key（sk-ws- 开头），复制回来粘贴到下面保存。Key 用 Windows 当前用户加密保存在本机。";
+        RecheckNotice();
     }
 
     private static readonly Dictionary<string, (string, string)[]> Guides = new()
@@ -324,14 +334,10 @@ public partial class MainWindow : Window
 
     private void StartEngine()
     {
-        var key = SecretStore.GetApiKey();
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            NavSetup.IsChecked = true;
-            Toast("请先在“设备与接入”里保存 API Key");
-            return;
-        }
         ApplyFormToConfig();
+        // 开始前检查 API Key、虚拟声卡、设备选择，缺什么一次列出来
+        if (!Preflight()) return;
+        var key = SecretStore.GetApiKey()!;
         WarnText.Text = "";
         try
         {
@@ -344,6 +350,7 @@ public partial class MainWindow : Window
             _engine.UtteranceAudio += (ch, id, audio) => Dispatcher.BeginInvoke(() => _timeline.AttachAudio(ch, id, audio, rate));
             _engine.Start();
             StartWatchdog();
+            _tray?.SetRunning(true);
             Toast("翻译已开始");
         }
         catch (Exception ex)
@@ -361,7 +368,9 @@ public partial class MainWindow : Window
         _engine?.Dispose();
         _engine = null;
         StopWatchdog();
+        _tray?.SetRunning(false);
         UpdateHero();
+        UpdateBudgetTexts();
         Toast("翻译已停止");
     }
 
@@ -373,6 +382,7 @@ public partial class MainWindow : Window
         StopWatchdog();
         _hotkeys?.Dispose();
         _overlay.Close();
+        DisposeTray();
         _cfg.Save();
     }
 
@@ -575,8 +585,7 @@ public partial class MainWindow : Window
         OverlayVisible.IsChecked = o.Visible;
         OvFont.Value = o.FontSize;
         OvOpacity.Value = o.Opacity;
-        OvLines.Value = o.MaxLines;
-        OvHold.Value = o.HoldSeconds;
+        OvHold.Value = o.HoldSeconds <= 0 ? OvHold.Maximum : Math.Min(o.HoldSeconds, OvHold.Maximum - 5);
         OvShowOriginal.IsChecked = o.ShowOriginal;
         OverlayEditHint.Text = $"按 {KeyName(_cfg.Hotkeys.OverlayEdit)} 进入编辑：拖动移动、拖右下角改大小，旁边的工具栏可调背景透明度、字号和各类文字颜色；再按一次锁定。";
         UpdateOverlayTexts();
@@ -584,11 +593,10 @@ public partial class MainWindow : Window
 
     private void UpdateOverlayTexts()
     {
-        if (OvFontText == null || OvOpacityText == null || OvLinesText == null || OvHoldText == null) return;
+        if (OvFontText == null || OvOpacityText == null || OvHoldText == null) return;
         OvFontText.Text = $"{OvFont.Value:F0}";
         OvOpacityText.Text = $"{OvOpacity.Value * 100:F0}%";
-        OvLinesText.Text = $"{OvLines.Value:F0} 句";
-        OvHoldText.Text = $"{OvHold.Value:F0} 秒";
+        OvHoldText.Text = OvHold.Value >= OvHold.Maximum ? "一直保留" : $"{OvHold.Value:F0} 秒";
     }
 
     private void Overlay_Changed(object sender, RoutedEventArgs e)
@@ -598,10 +606,8 @@ public partial class MainWindow : Window
         var o = _cfg.Overlay;
         o.FontSize = Math.Round(OvFont.Value);
         o.Opacity = Math.Round(OvOpacity.Value, 2);
-        o.MaxLines = (int)OvLines.Value;
-        o.HoldSeconds = OvHold.Value;
+        o.HoldSeconds = OvHold.Value >= OvHold.Maximum ? 0 : OvHold.Value;
         o.ShowOriginal = OvShowOriginal.IsChecked == true;
-        _timeline.RecentMax = o.MaxLines;
         _overlay.ApplyStyle();
         _cfg.Save();
     }
@@ -835,7 +841,8 @@ public partial class MainWindow : Window
         SendToggle.IsChecked = s.SendEnabled;
         ReceiveToggle.IsChecked = s.ReceiveEnabled;
         var usage = _engine!.Usage;
-        SideCost.Text = $"本次 ¥{usage.CostYuan:F3} / 预算 ¥{usage.BudgetYuan:F0}";
+        SideCost.Text = $"本次 ¥{usage.CostYuan:F3}";
+        if (BudgetPopup.IsOpen) UpdateBudgetTexts();
         if (!string.IsNullOrEmpty(s.Warning)) WarnText.Text = s.Warning;
         WarnBox.Visibility = string.IsNullOrEmpty(WarnText.Text) ? Visibility.Collapsed : Visibility.Visible;
         ExtendBudgetBtn.Visibility = _engine.BudgetPaused ? Visibility.Visible : Visibility.Collapsed;

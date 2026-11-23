@@ -8,8 +8,10 @@
     <ApplicationIcon>../GVT.App/Assets/app.ico</ApplicationIcon>
     <Product>游戏双译</Product>
     <AssemblyTitle>游戏双译 · 原声恢复</AssemblyTitle>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- 只保留中文资源，安装包更小 -->
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

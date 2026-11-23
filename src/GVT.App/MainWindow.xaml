@@ -243,16 +243,45 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- 底部运行状态 -->
-                <Border DockPanel.Dock="Bottom" Style="{StaticResource Inset}" Padding="12,10">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="SideDot" Style="{StaticResource PulseDot}" Fill="{StaticResource B.Text3}" Tag="False"/>
-                            <TextBlock x:Name="SideStatus" Text="未运行" Margin="8,0,0,0" FontSize="12.5" FontWeight="Medium"/>
-                        </StackPanel>
-                        <TextBlock x:Name="SideCost" Text="本次 ¥0.000" Style="{StaticResource T.Caption}" Margin="16,4,0,0"/>
-                    </StackPanel>
-                </Border>
+                <!-- 底部运行状态：点击可修改单次花费上限 -->
+                <Grid DockPanel.Dock="Bottom">
+                    <Border x:Name="SideCard" Padding="12,10" CornerRadius="12" BorderThickness="1" Cursor="Hand"
+                            ToolTip="点击修改单次花费上限" MouseLeftButtonUp="SideCard_Click">
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource Inset}">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource B.Surface3}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource B.BorderStrong}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="&#xE70F;" FontFamily="{StaticResource F.Icon}" FontSize="12" Foreground="{StaticResource B.Text3}" VerticalAlignment="Center"/>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="SideDot" Style="{StaticResource PulseDot}" Fill="{StaticResource B.Text3}" Tag="False"/>
+                                    <TextBlock x:Name="SideStatus" Text="未运行" Margin="8,0,0,0" FontSize="12.5" FontWeight="Medium"/>
+                                </StackPanel>
+                                <TextBlock x:Name="SideCost" Text="本次 ¥0.000" Style="{StaticResource T.Caption}" Margin="16,4,0,0"/>
+                                <TextBlock x:Name="SideBudget" Text="上限 ¥5" Style="{StaticResource T.Caption}" Margin="16,1,0,0"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Popup x:Name="BudgetPopup" PlacementTarget="{Binding ElementName=SideCard}" Placement="Top" VerticalOffset="-6"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Style="{StaticResource FloatCard}" Margin="16,16,16,24" Width="330">
+                            <StackPanel>
+                                <TextBlock Text="单次花费上限" Style="{StaticResource T.H2}"/>
+                                <TextBlock Text="每次点“开始”后单独计算。到了上限会自动暂停翻译，队友原声照常能听到。" Style="{StaticResource T.Caption}"
+                                           TextWrapping="Wrap" Margin="0,4,0,14"/>
+                                <c:BudgetPicker x:Name="PopupBudget"/>
+                                <TextBlock x:Name="PopupCost" Style="{StaticResource T.Caption}" Margin="2,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Grid>
 
                 <StackPanel>
                     <TextBlock Text="工作台" Style="{StaticResource T.Label}" Margin="10,0,0,6"/>
@@ -433,12 +462,21 @@
                         <Border Style="{StaticResource Card}" Margin="0,0,0,14">
                             <StackPanel>
                                 <DockPanel>
-                                    <Border x:Name="KeyChip" DockPanel.Dock="Right" Style="{StaticResource Chip}">
-                                        <TextBlock x:Name="KeyChipText" Text="未设置" FontSize="12"/>
-                                    </Border>
+                                    <Grid DockPanel.Dock="Right" VerticalAlignment="Center">
+                                        <Border x:Name="KeyChip" Style="{StaticResource Chip}">
+                                            <TextBlock x:Name="KeyChipText" Text="未设置" FontSize="12"/>
+                                        </Border>
+                                        <Button x:Name="CreateKeyBtn" Style="{StaticResource BtnPrimary}" Padding="12,5" Visibility="Collapsed" Click="CreateKey_Click"
+                                                ToolTip="打开阿里云百炼控制台的 API Key 页面">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="去创建 API Key"/>
+                                                <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource F.Icon}" FontSize="11" Margin="6,1,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
                                     <TextBlock Text="阿里云百炼 API Key" Style="{StaticResource T.H2}"/>
                                 </DockPanel>
-                                <TextBlock Text="使用“按量付费”的 Key（sk-ws- 开头）。用 Windows 当前用户加密保存在本机，不会以明文写入磁盘。" Style="{StaticResource T.Caption}" Margin="0,4,0,14"/>
+                                <TextBlock x:Name="KeyHint" Text="使用“按量付费”的 Key（sk-ws- 开头）。用 Windows 当前用户加密保存在本机，不会以明文写入磁盘。" Style="{StaticResource T.Caption}" Margin="0,4,0,14" TextWrapping="Wrap"/>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Style="{StaticResource BtnPrimary}" Content="保存" Margin="10,0,0,0" Click="SaveKey_Click"/>
                                     <PasswordBox x:Name="ApiKeyBox"/>
@@ -446,21 +484,35 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                        <Border x:Name="DeviceCard" Style="{StaticResource Card}" Margin="0,0,0,14">
                             <StackPanel>
                                 <DockPanel>
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnBase}" Click="RefreshDevices_Click">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE72C;" FontFamily="{StaticResource F.Icon}" FontSize="12" VerticalAlignment="Center"/>
-                                            <TextBlock Text="重新检测" Margin="6,0,0,0"/>
-                                        </StackPanel>
-                                    </Button>
+                                    <Grid DockPanel.Dock="Right">
+                                        <Button x:Name="RefreshDevicesBtn" Style="{StaticResource BtnBase}" Click="RefreshDevices_Click">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE72C;" FontFamily="{StaticResource F.Icon}" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock Text="重新检测" Margin="6,0,0,0"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="InstallEnvBtn" Style="{StaticResource BtnPrimary}" Click="InstallEnv_Click" Visibility="Collapsed">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="InstallEnvIcon" Text="&#xE896;" FontFamily="{StaticResource F.Icon}" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="InstallEnvText" Text="安装环境" Margin="6,0,0,0"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
                                     <TextBlock Text="音频设备" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
                                 </DockPanel>
                                 <WrapPanel Margin="0,10,0,16">
                                     <Border x:Name="CableAChip" Style="{StaticResource Chip}" Margin="0,0,8,0"><TextBlock x:Name="CableAText" FontSize="12"/></Border>
                                     <Border x:Name="CableBChip" Style="{StaticResource Chip}"><TextBlock x:Name="CableBText" FontSize="12"/></Border>
                                 </WrapPanel>
+                                <Border x:Name="EnvMissingBox" Style="{StaticResource Inset}" Margin="0,-4,0,16" Visibility="Collapsed">
+                                    <DockPanel>
+                                        <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource F.Icon}" FontSize="16" Foreground="{StaticResource B.Warn}" VerticalAlignment="Top" Margin="0,1,10,0"/>
+                                        <TextBlock x:Name="EnvMissingText" Foreground="{StaticResource B.Text}" TextWrapping="Wrap" LineHeight="20"/>
+                                    </DockPanel>
+                                </Border>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -496,7 +548,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                        <Border x:Name="GuideCard" Style="{StaticResource Card}" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="在游戏 / 语音软件里这样设置" Style="{StaticResource T.H2}"/>
                                 <Border Style="{StaticResource SegmentHost}" Margin="0,12,0,14">
@@ -687,12 +739,13 @@
                                         <Slider x:Name="OvOpacity" Minimum="0.2" Maximum="1" SmallChange="0.05" ValueChanged="Overlay_Changed"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="2">
-                                        <DockPanel><TextBlock x:Name="OvLinesText" DockPanel.Dock="Right" Style="{StaticResource T.Caption}"/><TextBlock Text="最多显示几句" Style="{StaticResource FieldLabel}"/></DockPanel>
-                                        <Slider x:Name="OvLines" Minimum="1" Maximum="8" SmallChange="1" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="Overlay_Changed"/>
+                                        <DockPanel><TextBlock x:Name="OvHoldText" DockPanel.Dock="Right" Style="{StaticResource T.Caption}"/><TextBlock Text="每条字幕停留多久后淡出" Style="{StaticResource FieldLabel}"/></DockPanel>
+                                        <Slider x:Name="OvHold" Minimum="5" Maximum="125" SmallChange="5" IsSnapToTickEnabled="True" TickFrequency="5" ValueChanged="Overlay_Changed"/>
+                                        <TextBlock Text="拖到最右边 = 一直保留" Style="{StaticResource T.Caption}" Margin="0,4,0,0"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Row="2" Grid.Column="2">
-                                        <DockPanel><TextBlock x:Name="OvHoldText" DockPanel.Dock="Right" Style="{StaticResource T.Caption}"/><TextBlock Text="字幕停留时间" Style="{StaticResource FieldLabel}"/></DockPanel>
-                                        <Slider x:Name="OvHold" Minimum="5" Maximum="90" SmallChange="5" IsSnapToTickEnabled="True" TickFrequency="5" ValueChanged="Overlay_Changed"/>
+                                    <StackPanel Grid.Row="2" Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Text="显示几句" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="自动铺满浮窗：浮窗拉得越高，显示的句子越多，最新的在最下面。" Style="{StaticResource T.Caption}" TextWrapping="Wrap" LineHeight="18"/>
                                     </StackPanel>
                                 </Grid>
                                 <CheckBox x:Name="OvShowOriginal" Style="{StaticResource Toggle}" Margin="0,16,0,0" Click="Overlay_Changed">
@@ -749,6 +802,24 @@
                             <CheckBox x:Name="SaveAudioCheck" Style="{StaticResource Toggle}" Margin="0,12,0,0" Click="SaveAudio_Click">
                                 <TextBlock Foreground="{StaticResource B.Text}" TextWrapping="Wrap" MaxWidth="620"><Run Text="保存识别音频（用于改进识别）"/><Run Text="  把每句话的录音和识别结果存到日志文件夹的 utterances 里，只保存在本机。下次点“开始”生效。" Foreground="{StaticResource B.Text3}" FontSize="12"/></TextBlock>
                             </CheckBox>
+                            <Border Style="{StaticResource Card}" Padding="18,14" Margin="0,14,0,0" HorizontalAlignment="Left">
+                                <WrapPanel>
+                                    <StackPanel Margin="0,0,40,4">
+                                        <TextBlock Text="单次花费上限" Style="{StaticResource FieldLabel}"/>
+                                        <c:BudgetPicker x:Name="DiagBudget"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,0,4">
+                                        <TextBlock Text="点右上角关闭时" Style="{StaticResource FieldLabel}"/>
+                                        <Border Style="{StaticResource SegmentHost}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="CloseAsk" Style="{StaticResource Segment}" GroupName="CloseAct" Content="每次询问" Click="CloseAction_Click"/>
+                                                <RadioButton x:Name="CloseTray" Style="{StaticResource Segment}" GroupName="CloseAct" Content="最小化到后台" Click="CloseAction_Click"/>
+                                                <RadioButton x:Name="CloseExit" Style="{StaticResource Segment}" GroupName="CloseAct" Content="彻底退出" Click="CloseAction_Click"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </WrapPanel>
+                            </Border>
                         </StackPanel>
                     </DockPanel>
                     <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16,12,6,8">
@@ -778,5 +849,75 @@
             <Border.RenderTransform><TranslateTransform x:Name="ToastSlide" Y="12"/></Border.RenderTransform>
             <TextBlock x:Name="ToastText" Foreground="{StaticResource B.Text}"/>
         </Border>
+        <!-- 问题提示卡：开始前检查不通过、安装环境的结果等。不会自动消失，修好或点关闭才收起 -->
+        <Border x:Name="NoticeBox" Grid.Column="1" Style="{StaticResource FloatCard}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,26" Width="560" Padding="0" Visibility="Collapsed">
+            <Border.RenderTransform><TranslateTransform x:Name="NoticeSlide"/></Border.RenderTransform>
+            <StackPanel>
+                <DockPanel Margin="18,16,10,10">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Padding="8,4" VerticalAlignment="Top" Click="NoticeClose_Click" ToolTip="关闭">
+                        <TextBlock Text="&#xE711;" FontFamily="{StaticResource F.Icon}" FontSize="11"/>
+                    </Button>
+                    <Border x:Name="NoticeIconBox" DockPanel.Dock="Left" Width="34" Height="34" CornerRadius="10" Background="{StaticResource B.DangerSoft}" Margin="0,0,12,0" VerticalAlignment="Top">
+                        <TextBlock x:Name="NoticeIcon" Text="&#xE7BA;" FontFamily="{StaticResource F.Icon}" FontSize="16" Foreground="{StaticResource B.Danger}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="NoticeTitle" Text="还不能开始翻译" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource B.Text}"/>
+                        <TextBlock x:Name="NoticeSub" Style="{StaticResource T.Caption}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DockPanel>
+                <ItemsControl x:Name="NoticeList" Margin="10,0,10,12">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource B.Surface}" BorderBrush="{StaticResource B.Border}" BorderThickness="1" CornerRadius="12" Padding="14,11" Margin="0,0,0,6">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnBase}" Padding="12,6" Margin="12,0,0,0" VerticalAlignment="Center"
+                                            Content="{Binding ActionText}" Tag="{Binding}" Click="NoticeAction_Click"
+                                            Visibility="{Binding ActionVisibility}"/>
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Glyph}" FontFamily="{StaticResource F.Icon}" FontSize="14" Foreground="{Binding GlyphBrush}"
+                                               VerticalAlignment="Top" Margin="0,2,12,0"/>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource B.Text}" FontWeight="Medium" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource T.Caption}" TextWrapping="Wrap" Margin="0,3,0,0" LineHeight="18"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- 关闭方式对话框 -->
+        <Grid x:Name="CloseDialog" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#99000000">
+            <Border x:Name="CloseCard" Style="{StaticResource FloatCard}" Width="440" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border.RenderTransform><ScaleTransform x:Name="CloseScale" CenterX="220" CenterY="140"/></Border.RenderTransform>
+                <StackPanel>
+                    <TextBlock Text="要关闭游戏双译吗？" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource B.Text}" FontFamily="{StaticResource F.Display}"/>
+                    <TextBlock Text="最小化后程序在屏幕右下角的托盘里继续运行，翻译、快捷键和游戏内浮窗都照常工作。" Style="{StaticResource T.Caption}"
+                               TextWrapping="Wrap" Margin="0,6,0,16" LineHeight="18"/>
+                    <RadioButton x:Name="ChoiceTray" Style="{StaticResource ChoiceCard}" GroupName="CloseChoice" IsChecked="True">
+                        <StackPanel>
+                            <TextBlock Text="最小化到后台（推荐）" FontWeight="Medium" Foreground="{StaticResource B.Text}"/>
+                            <TextBlock Text="不占任务栏，双击右下角托盘图标可以重新打开" Style="{StaticResource T.Caption}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="ChoiceExit" Style="{StaticResource ChoiceCard}" GroupName="CloseChoice">
+                        <StackPanel>
+                            <TextBlock Text="彻底退出" FontWeight="Medium" Foreground="{StaticResource B.Text}"/>
+                            <TextBlock Text="停止翻译并关闭程序" Style="{StaticResource T.Caption}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <CheckBox x:Name="ChoiceRemember" Style="{StaticResource Toggle}" Margin="2,8,0,0">
+                        <TextBlock Foreground="{StaticResource B.Text2}" FontSize="12.5"><Run Text="记住我的选择，不再询问"/><Run Text="（可在“诊断与日志”里修改）" Foreground="{StaticResource B.Text3}"/></TextBlock>
+                    </CheckBox>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+                        <Button Style="{StaticResource BtnGhost}" Content="取消" Click="CloseCancel_Click" IsCancel="True"/>
+                        <Button Style="{StaticResource BtnPrimary}" Content="确定" Margin="8,0,0,0" Padding="22,7" Click="CloseConfirm_Click" IsDefault="True"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

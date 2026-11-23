@@ -137,7 +137,8 @@ public sealed class UsageMeter(BudgetConfig budget)
         }
     }
 
-    public bool OverBudget => BudgetYuan > 0 && CostYuan >= BudgetYuan;
+    public bool Unlimited => budget.SessionBudgetYuan <= 0;
+    public bool OverBudget => !Unlimited && CostYuan >= BudgetYuan;
 
     public void AddAsr(double seconds) { lock (_lock) AsrSeconds += Math.Ceiling(seconds); Changed?.Invoke(); }
     /// <summary>qwen-audio 系列识别按 token 计费。</summary>

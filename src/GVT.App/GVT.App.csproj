@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- 只用 WinForms 的托盘图标 NotifyIcon；不引入它的全局 using，避免和 WPF 类型重名 -->
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>GameVoiceTranslator</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
@@ -15,9 +17,16 @@
     <Description>游戏内双向语音翻译：你说中文队友听英文，队友说英文你听中文</Description>
     <Company>游戏双译</Company>
     <Copyright>© 2026</Copyright>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- 只保留中文资源，安装包更小 -->
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\GVT.Core\GVT.Core.csproj" />
@@ -28,6 +37,8 @@
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\app.png" />
     <None Include="glossary.default.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 虚拟声卡安装包（VB-Audio VB-CABLE、Hi-Fi Cable），“安装环境”按钮用 -->
+    <None Include="..\..\installer\drivers\**\*" Link="drivers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\models\silero_vad.onnx" Link="models\silero_vad.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\models\silero_vad.onnx')" />
   </ItemGroup>
 

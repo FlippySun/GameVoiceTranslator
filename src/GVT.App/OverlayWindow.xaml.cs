@@ -168,6 +168,7 @@ public partial class OverlayWindow : Window
     {
         if (EditMode) { foreach (var i in _timeline.Recent) i.Opacity = 1; return; }
         var hold = _cfg.Overlay.HoldSeconds;
+        if (hold <= 0) { Panel.Visibility = Visibility.Visible; return; } // 一直保留：只会被新条目挤出浮窗
         foreach (var item in _timeline.Recent.ToList())
         {
             if (item.IsBusy) continue;

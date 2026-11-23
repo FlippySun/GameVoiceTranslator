@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using GVT.Core.Config;
@@ -8,9 +8,35 @@ namespace GVT.App;
 
 public partial class App : Application
 {
+    private const string InstanceMutexName = "GVT_GameVoiceTranslator_SingleInstance";
+    public const string ShowEventName = "GVT_GameVoiceTranslator_ShowMainWindow";
+    private Mutex? _instanceMutex;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 以管理员身份运行的“安装虚拟声卡”助手：只装驱动，不开界面
+        var hi = Array.IndexOf(e.Args, DriverInstaller.HelperArg);
+        if (hi >= 0)
+        {
+            Shutdown(DriverInstaller.RunHelper(hi + 1 < e.Args.Length ? e.Args[hi + 1] : "vbcable,hificable"));
+            return;
+        }
+
+        // 只允许运行一个：再次打开时把已经在运行（可能缩在托盘里）的窗口叫出来
+        bool debugShot = e.Args.Contains("--shot");
+        if (!debugShot)
+        {
+            _instanceMutex = new Mutex(true, InstanceMutexName, out bool first);
+            if (!first)
+            {
+                try { using var show = EventWaitHandle.OpenExisting(ShowEventName); show.Set(); } catch { }
+                Shutdown();
+                return;
+            }
+        }
+
         DispatcherUnhandledException += (_, ex) =>
         {
             Log.Error("未处理异常：" + ex.Exception);
@@ -33,6 +59,15 @@ public partial class App : Application
         if (!File.Exists(glossaryPath) && File.Exists(defaultGlossary)) File.Copy(defaultGlossary, glossaryPath);
 
         Log.Info($"配置目录：{AppConfig.ConfigDirectory}");
-        new MainWindow(cfg).Show();
+        var window = new MainWindow(cfg);
+        if (!debugShot) window.ListenForShowRequests(ShowEventName);
+        window.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try { _instanceMutex?.ReleaseMutex(); } catch { }
+        _instanceMutex?.Dispose();
+        base.OnExit(e);
     }
 }

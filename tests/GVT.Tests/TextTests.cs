@@ -206,3 +206,41 @@ public class Round3NumberTests
     [Fact]
     public void LoneRight_IsBackchannel() => Assert.True(GVT.Core.Pipeline.TranslationChannel.IsBackchannel("Right."));
 }
+
+public class EnvironmentCheckTests
+{
+    private static readonly string[] Render = { "扬声器 (USB Audio)", GVT.Core.Setup.EnvironmentCheck.SendCableRender, GVT.Core.Setup.EnvironmentCheck.RecvCableRender };
+    private static readonly string[] Capture = { "麦克风 (USB Audio)", GVT.Core.Setup.EnvironmentCheck.SendCableCapture, GVT.Core.Setup.EnvironmentCheck.RecvCableCapture };
+
+    private static List<GVT.Core.Setup.EnvIssue> Run(AppConfig cfg, bool key = true, string[]? r = null, string[]? c = null, string defR = "扬声器 (USB Audio)", string defC = "麦克风 (USB Audio)")
+        => GVT.Core.Setup.EnvironmentCheck.Run(cfg, key, r ?? Render, c ?? Capture, defR, defC);
+
+    [Fact]
+    public void AllGood_NoIssues() => Assert.Empty(Run(new AppConfig()));
+
+    [Fact]
+    public void MissingKeyAndBothCables_ListsTwoIssues()
+    {
+        var issues = Run(new AppConfig(), key: false, r: new[] { "扬声器 (USB Audio)" }, c: new[] { "麦克风 (USB Audio)" });
+        Assert.Equal(new[] { GVT.Core.Setup.EnvFix.ApiKey, GVT.Core.Setup.EnvFix.InstallDrivers }, issues.Select(i => i.Fix));
+    }
+
+    [Fact]
+    public void HeadphonesDefaultIsVirtualCable_AsksToPickDevice()
+    {
+        var issues = Run(new AppConfig(), defR: GVT.Core.Setup.EnvironmentCheck.SendCableRender);
+        Assert.Single(issues);
+        Assert.Equal(GVT.Core.Setup.EnvFix.Devices, issues[0].Fix);
+        Assert.Contains("耳机", issues[0].Title);
+    }
+
+    [Fact]
+    public void UnpluggedMic_AsksToPickDevice()
+    {
+        var cfg = new AppConfig();
+        cfg.Send.MicDevice = "Blue Yeti";
+        var issues = Run(cfg);
+        Assert.Single(issues);
+        Assert.Contains("我的麦克风", issues[0].Title);
+    }
+}

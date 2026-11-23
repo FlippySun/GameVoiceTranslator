@@ -6,3 +6,5 @@ TestResults/
 samples/
 *.part
 voice-lab/
+installer/publish/
+installer/output/

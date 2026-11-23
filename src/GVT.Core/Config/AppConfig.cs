@@ -17,6 +17,7 @@ public sealed class AppConfig
     public BudgetConfig Budget { get; set; } = new();
     public OverlayConfig Overlay { get; set; } = new();
     public DebugConfig Debug { get; set; } = new();
+    public GeneralConfig General { get; set; } = new();
     /// <summary>音色设计 / 声音复刻得到的自定义音色。</summary>
     public List<CustomVoiceConfig> CustomVoices { get; set; } = new();
 
@@ -221,6 +222,7 @@ public sealed class VadConfig
 
 public sealed class BudgetConfig
 {
+    /// <summary>每次点“开始”后的花费上限（元）；0 = 不限。</summary>
     public double SessionBudgetYuan { get; set; } = 5.0;
     public double AsrYuanPerSecond { get; set; } = 0.00033;
     public double TtsYuanPer10kChars { get; set; } = 1.0;
@@ -246,6 +248,7 @@ public sealed class OverlayConfig
     public int MaxLines { get; set; } = 4;
     public double Height { get; set; } = 220;
     /// <summary>字幕在浮窗里停留多久后淡出（秒）。</summary>
+    /// <summary>每条字幕停留多少秒后淡出；0 = 一直保留（直到被新字幕挤出浮窗）。</summary>
     public double HoldSeconds { get; set; } = 25;
     public bool ShowOriginal { get; set; } = true;
     /// <summary>“我说的”译文颜色（队友听到的英文）。</summary>
@@ -254,4 +257,14 @@ public sealed class OverlayConfig
     public string MateTextColor { get; set; } = "#FFE2A8";
     /// <summary>原文（小字）颜色。</summary>
     public string OriginalTextColor { get; set; } = "#B8BEC9";
+}
+
+public enum CloseAction { Ask, MinimizeToTray, Exit }
+
+public sealed class GeneralConfig
+{
+    /// <summary>点右上角关闭时：每次询问 / 最小化到托盘 / 彻底退出。</summary>
+    public CloseAction CloseAction { get; set; } = CloseAction.Ask;
+    /// <summary>第一次最小化到托盘时弹一次系统通知，告诉用户程序还在后台。</summary>
+    public bool TrayHintShown { get; set; }
 }
