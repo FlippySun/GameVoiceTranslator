@@ -1,0 +1,46 @@
+name: 问题反馈 / Bug report
+description: 软件出错、崩溃、没有声音等
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 感谢反馈！请不要贴出你的 API Key。
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本
+      placeholder: 例如 1.0.0（窗口标题或安装包文件名里能看到）
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 系统
+      placeholder: 例如 Windows 11 23H2
+  - type: dropdown
+    id: area
+    attributes:
+      label: 出问题的部分
+      options:
+        - 安装 / 安装环境
+        - 发送（我说中文，队友听英文）
+        - 接收（队友说英文，我听中文）
+        - 字幕浮窗
+        - 快捷键
+        - 界面 / 托盘
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 发生了什么、怎么复现
+      description: 你做了什么，期望看到什么，实际看到什么
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: '%APPDATA%\GameVoiceTranslator\logs 里对应时间的 app-*.log 相关片段'
+      render: text

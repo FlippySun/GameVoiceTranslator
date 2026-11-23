@@ -38,7 +38,9 @@ public sealed class AppConfig
     {
         get
         {
-            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GameVoiceTranslator");
+            // GVT_CONFIG_DIR：可选，指定配置目录（便携使用、测试、截图用）
+            var custom = Environment.GetEnvironmentVariable("GVT_CONFIG_DIR");
+            var dir = !string.IsNullOrWhiteSpace(custom) ? custom : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GameVoiceTranslator");
             Directory.CreateDirectory(dir);
             return dir;
         }

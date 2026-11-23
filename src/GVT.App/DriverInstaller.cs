@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using GVT.Core.Audio;
 using GVT.Core.Config;
 using GVT.Core.Pipeline;
@@ -9,45 +10,55 @@ using GVT.Core.Setup;
 namespace GVT.App;
 
 /// <summary>
-/// 一键安装虚拟声卡（VB-Audio VB-CABLE、Hi-Fi Cable，安装包随程序放在 drivers 目录）。
-/// 主程序以管理员身份再启动自己一次（--install-drivers），只弹一次 UAC；
+/// 一键安装虚拟声卡（VB-Audio 的 VB-CABLE 和 Hi-Fi Cable）。
+///
+/// VB-Audio 的安装包不允许随本软件再分发，所以不打包进来：点“安装环境”时从 VB-Audio 官网下载，
+/// 校验 Authenticode 签名（必须有效，且签名者是 VB-Audio 作者 Vincent Burel）后再安装。
+/// （自己编译时如果在程序目录的 drivers 文件夹里放了安装包，就直接用本地的。）
+///
+/// 主程序以管理员身份再启动自己一次（--install-drivers），只弹一次 UAC；管理员进程运行安装程序前会再校验一次签名。
 /// 装完由主程序把 Windows 默认设备恢复成装之前的样子（驱动安装会把默认播放设备切到虚拟线），再把本软件的设备选好。
 /// </summary>
 public static class DriverInstaller
 {
     public const string HelperArg = "--install-drivers";
-
-    public static string DriversDir => Path.Combine(AppContext.BaseDirectory, "drivers");
-    private static string VbCableSetup => Path.Combine(DriversDir, "vbcable", Environment.Is64BitOperatingSystem ? "VBCABLE_Setup_x64.exe" : "VBCABLE_Setup.exe");
-    private static string HiFiSetup => Path.Combine(DriversDir, "hificable", "HiFiCableAsioBridgeSetup.exe");
-
-    public static bool Bundled => File.Exists(VbCableSetup) && File.Exists(HiFiSetup);
+    private const string DirArg = "--dir";
 
     public enum Outcome { Installed, NeedsRestart, Cancelled, Failed }
 
     public sealed record Result(Outcome Outcome, string Message);
 
-    /// <summary>主程序里调用：装缺的驱动、恢复默认设备、选好本软件的设备。</summary>
-    public static async Task<Result> InstallAsync(AppConfig cfg)
+    /// <summary>主程序里调用：下载（或用本地的）安装包、安装缺的驱动、恢复默认设备、选好本软件的设备。</summary>
+    public static async Task<Result> InstallAsync(AppConfig cfg, IProgress<string>? status = null)
     {
-        if (!Bundled) return new(Outcome.Failed, "安装包缺失，请重新安装游戏双译。");
         var before = EnvironmentCheck.Drivers();
         if (before.AllInstalled) { AssignDevices(cfg, DefaultDevices.Take()); return new(Outcome.Installed, "虚拟声卡已经装好了。"); }
 
-        var snapshot = DefaultDevices.Take();
-        var parts = new List<string>();
-        if (!before.SendCable) parts.Add("vbcable");
-        if (!before.RecvCable) parts.Add("hificable");
+        var need = DriverPackages.All.Where(p => p.Part == "vbcable" ? !before.SendCable : !before.RecvCable).ToList();
+        string dir;
+        try
+        {
+            dir = await DriverPackages.PrepareAsync(need, status).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidDataException)
+        {
+            return new(Outcome.Failed, "下载虚拟声卡安装包失败，请检查网络后再试。（" + ex.Message + "）");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return new(Outcome.Failed, ex.Message);
+        }
 
+        status?.Report("正在安装…");
+        var snapshot = DefaultDevices.Take();
         int code;
         try
         {
-            var psi = new ProcessStartInfo(Environment.ProcessPath!, $"{HelperArg} {string.Join(',', parts)}")
-            {
-                UseShellExecute = true,
-                Verb = "runas",
-                WorkingDirectory = AppContext.BaseDirectory,
-            };
+            var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = true, Verb = "runas", WorkingDirectory = AppContext.BaseDirectory };
+            psi.ArgumentList.Add(HelperArg);
+            psi.ArgumentList.Add(string.Join(',', need.Select(p => p.Part)));
+            psi.ArgumentList.Add(DirArg);
+            psi.ArgumentList.Add(dir);
             using var p = Process.Start(psi) ?? throw new InvalidOperationException("无法启动安装程序");
             await p.WaitForExitAsync().ConfigureAwait(true);
             code = p.ExitCode;
@@ -57,6 +68,7 @@ public static class DriverInstaller
             return new(Outcome.Cancelled, "已取消。安装虚拟声卡需要管理员授权，请在弹出的窗口里点“是”。");
         }
         Log.Info($"虚拟声卡安装程序已结束（{code}）");
+        if (code == 5) return new(Outcome.Failed, "安装包签名校验没有通过，已停止安装。请重新点“安装环境”下载。");
 
         // 驱动装好后设备要过几秒才出现
         EnvironmentCheck.DriverState after = before;
@@ -94,15 +106,25 @@ public static class DriverInstaller
         cfg.Save();
     }
 
-    /// <summary>以管理员身份运行的那个进程：依次静默安装，返回 0 表示安装程序都正常结束。</summary>
-    public static int RunHelper(string arg)
+    /// <summary>
+    /// 以管理员身份运行的那个进程：运行前再校验一次签名（下载目录用户可写），然后依次静默安装。
+    /// 返回 0 = 安装程序都正常结束，5 = 签名校验失败。
+    /// </summary>
+    public static int RunHelper(string[] args)
     {
+        var hi = Array.IndexOf(args, HelperArg);
+        var parts = hi >= 0 && hi + 1 < args.Length ? args[hi + 1] : "vbcable,hificable";
+        var di = Array.IndexOf(args, DirArg);
+        var dir = di >= 0 && di + 1 < args.Length ? args[di + 1] : DriverPackages.BundledDir;
+
         var log = new List<string>();
         int result = 0;
-        foreach (var part in arg.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in parts.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            var exe = part switch { "vbcable" => VbCableSetup, "hificable" => HiFiSetup, _ => null };
+            var pkg = DriverPackages.All.FirstOrDefault(p => p.Part == part);
+            var exe = pkg == null ? null : Path.Combine(dir, pkg.Part, pkg.Setup);
             if (exe == null || !File.Exists(exe)) { log.Add($"{part}: 找不到安装包"); result = 2; continue; }
+            if (!DriverPackages.IsTrusted(exe)) { log.Add($"{part}: 签名校验失败，未运行"); result = 5; continue; }
             try
             {
                 using var p = Process.Start(new ProcessStartInfo(exe, "-i -h")
@@ -119,4 +141,5 @@ public static class DriverInstaller
         try { File.WriteAllLines(Path.Combine(Path.GetTempPath(), "gvt-driver-install.log"), log); } catch { }
         return result;
     }
+
 }

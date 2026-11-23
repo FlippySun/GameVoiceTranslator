@@ -98,7 +98,7 @@ public partial class MainWindow
             var names = new List<string>();
             if (!d.SendCable) names.Add("VB-CABLE（把英文译音送进游戏）");
             if (!d.RecvCable) names.Add("Hi-Fi Cable（接收队友声音）");
-            EnvMissingText.Text = $"这台电脑还缺少虚拟声卡：{string.Join("、", names)}。\n点右上角“安装环境”自动安装并设置好，会弹出一次管理员授权，大约 1 分钟。";
+            EnvMissingText.Text = $"这台电脑还缺少虚拟声卡：{string.Join("、", names)}。\n点右上角“安装环境”：自动从 VB-Audio 官网下载、校验签名后安装并设置好，会弹出一次管理员授权，大约 1 分钟（需要联网）。";
         }
     }
 
@@ -116,9 +116,9 @@ public partial class MainWindow
         InstallEnvIcon.RenderTransformOrigin = new Point(0.5, 0.5);
         InstallEnvIcon.RenderTransform = spin;
         spin.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.1)) { RepeatBehavior = RepeatBehavior.Forever });
-        Toast("请在弹出的窗口里点“是”，允许安装虚拟声卡");
+        Toast("先从 VB-Audio 官网下载安装包，之后请在弹出的窗口里点“是”");
         DriverInstaller.Result result;
-        try { result = await DriverInstaller.InstallAsync(_cfg); }
+        try { result = await DriverInstaller.InstallAsync(_cfg, new Progress<string>(s => InstallEnvText.Text = s)); }
         catch (Exception ex) { result = new(DriverInstaller.Outcome.Failed, ex.Message); }
         finally
         {

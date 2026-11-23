@@ -20,7 +20,7 @@ public partial class App : Application
         var hi = Array.IndexOf(e.Args, DriverInstaller.HelperArg);
         if (hi >= 0)
         {
-            Shutdown(DriverInstaller.RunHelper(hi + 1 < e.Args.Length ? e.Args[hi + 1] : "vbcable,hificable"));
+            Shutdown(DriverInstaller.RunHelper(e.Args));
             return;
         }
 

@@ -121,6 +121,17 @@ try
             Console.WriteLine(issues.Count == 0 ? "开始前检查：全部通过" : string.Join(Environment.NewLine, issues.Select(i => $"[{i.Fix}] {i.Title}：{i.Detail}")));
             return 0;
         }
+        case "driver-download":
+        {
+            // 从 VB-Audio 官网下载虚拟声卡安装包并校验签名（不安装）
+            var dir = await GVT.Core.Setup.DriverPackages.PrepareAsync(GVT.Core.Setup.DriverPackages.All, new Progress<string>(Console.WriteLine));
+            foreach (var p in GVT.Core.Setup.DriverPackages.All)
+            {
+                var path = GVT.Core.Setup.DriverPackages.SetupPath(dir, p);
+                Console.WriteLine($"{p.Part}: {path} 签名可信 = {GVT.Core.Setup.DriverPackages.IsTrusted(path)}");
+            }
+            return 0;
+        }
         case "vocab-list":
             foreach (var p in new[] { "gvtzh", "gvten" })
                 Console.WriteLine(p + ": " + string.Join(", ", await AsrVocabulary.ListAsync(cfg.DashScope, SecretStore.GetApiKey()!, p)));

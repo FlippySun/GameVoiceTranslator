@@ -244,3 +244,31 @@ public class EnvironmentCheckTests
         Assert.Contains("我的麦克风", issues[0].Title);
     }
 }
+
+public class DriverPackageTests
+{
+    [Fact]
+    public void IsTrusted_RejectsUnsignedAndOtherSigners()
+    {
+        var txt = Path.GetTempFileName();
+        File.WriteAllText(txt, "not a signed file");
+        Assert.False(GVT.Core.Setup.DriverPackages.IsTrusted(txt));
+        // 有效签名但不是 VB-Audio 签的
+        var dotnet = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe");
+        if (File.Exists(dotnet)) Assert.False(GVT.Core.Setup.DriverPackages.IsTrusted(dotnet));
+    }
+
+    [Fact]
+    public void IsTrusted_RejectsTamperedInstaller()
+    {
+        var setup = GVT.Core.Setup.DriverPackages.SetupPath(GVT.Core.Setup.DriverPackages.DownloadDir, GVT.Core.Setup.DriverPackages.All[0]);
+        if (!File.Exists(setup)) return; // 没下载过就跳过（需要联网，见 Replay driver-download）
+        Assert.True(GVT.Core.Setup.DriverPackages.IsTrusted(setup));
+        var copy = Path.Combine(Path.GetTempPath(), "gvt-tampered.exe");
+        File.Copy(setup, copy, true);
+        var bytes = File.ReadAllBytes(copy);
+        bytes[bytes.Length / 2] ^= 0xFF;
+        File.WriteAllBytes(copy, bytes);
+        Assert.False(GVT.Core.Setup.DriverPackages.IsTrusted(copy));
+    }
+}

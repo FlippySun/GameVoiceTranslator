@@ -1,11 +1,11 @@
-; 游戏双译 安装包（Inno Setup 6）
+﻿; 游戏双译 安装包（Inno Setup 6）
 ; 构建：powershell -File installer\build-installer.ps1
-; 内容：自带 .NET 运行环境的程序（publish 目录）+ 虚拟声卡安装包（drivers，由软件里的“安装环境”按钮安装）
+; 内容：自带 .NET 运行环境的程序（publish 目录）。虚拟声卡不打包，由软件里的“安装环境”按钮从 VB-Audio 官网下载
 
 #define AppName "游戏双译"
 #define AppExe "GameVoiceTranslator.exe"
 #ifndef AppVersion
-  #define AppVersion "0.4.0"
+  #define AppVersion "1.0.0"
 #endif
 
 [Setup]
@@ -32,7 +32,7 @@ WizardStyle=modern
 Compression=lzma2/ultra64
 SolidCompression=yes
 OutputDir=output
-OutputBaseFilename={#AppName}-安装包-{#AppVersion}
+OutputBaseFilename=GameVoiceTranslator-Setup-{#AppVersion}
 ; 安装 / 卸载时如果软件正在运行，提示先关闭
 AppMutex=GVT_GameVoiceTranslator_SingleInstance
 CloseApplications=yes
