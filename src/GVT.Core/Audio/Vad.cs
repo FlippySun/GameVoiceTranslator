@@ -117,6 +117,8 @@ public sealed class VadSegmenter
     public event Action? SpeechEnd;
 
     public bool InSpeech => _inSpeech;
+    /// <summary>静音已够结束一句时再问一次：返回 true（这句话明显没说完）就改用 UnfinishedEndSilenceMs。</summary>
+    public Func<bool>? LooksUnfinished { get; set; }
     public float LastProbability { get; private set; }
 
     public VadSegmenter(IVoiceDetector vad, VadConfig cfg)
@@ -176,7 +178,9 @@ public sealed class VadSegmenter
         if (p < _cfg.EndThreshold) _silenceFrames++;
         else { _silenceFrames = 0; _speechFrames++; }
 
-        if (_silenceFrames >= MsToFrames(_cfg.EndSilenceMs) || _utteranceFrames >= MsToFrames(_cfg.MaxUtteranceMs))
+        bool silentEnough = _silenceFrames >= MsToFrames(_cfg.EndSilenceMs)
+            && (_silenceFrames >= MsToFrames(Math.Max(_cfg.EndSilenceMs, _cfg.UnfinishedEndSilenceMs)) || LooksUnfinished?.Invoke() != true);
+        if (silentEnough || _utteranceFrames >= MsToFrames(_cfg.MaxUtteranceMs))
         {
             _inSpeech = false;
             _silenceFrames = 0;

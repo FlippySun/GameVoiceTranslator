@@ -239,6 +239,14 @@ public partial class MainWindow : Window
         return s.EndsWith("（未找到）") ? s[..^"（未找到）".Length] : s;
     }
 
+    private void ExtendBudget_Click(object sender, RoutedEventArgs e)
+    {
+        if (_engine == null) return;
+        _engine.ExtendBudget(5);
+        WarnText.Text = "";
+        Toast($"预算已加到 ¥{_engine.Usage.BudgetYuan:F0}，继续翻译");
+    }
+
     private void RefreshDevices_Click(object sender, RoutedEventArgs e) { LoadDevices(); Toast("设备列表已刷新"); }
 
     private void SaveKey_Click(object sender, RoutedEventArgs e)
@@ -386,6 +394,7 @@ public partial class MainWindow : Window
         SideDot.Fill = (Brush)FindResource(running ? "B.Ok" : "B.Text3");
         SideStatus.Text = running ? "翻译运行中" : "未运行";
         WarnBox.Visibility = string.IsNullOrEmpty(WarnText.Text) ? Visibility.Collapsed : Visibility.Visible;
+        ExtendBudgetBtn.Visibility = _engine?.BudgetPaused == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // =====================================================================
@@ -829,6 +838,7 @@ public partial class MainWindow : Window
         SideCost.Text = $"本次 ¥{usage.CostYuan:F3} / 预算 ¥{usage.BudgetYuan:F0}";
         if (!string.IsNullOrEmpty(s.Warning)) WarnText.Text = s.Warning;
         WarnBox.Visibility = string.IsNullOrEmpty(WarnText.Text) ? Visibility.Collapsed : Visibility.Visible;
+        ExtendBudgetBtn.Visibility = _engine.BudgetPaused ? Visibility.Visible : Visibility.Collapsed;
         _overlay.SetStatus(true, s.SendEnabled, s.PttDown, s.ReceiveEnabled, s.HoldOriginal);
     }
 

@@ -86,8 +86,12 @@ public sealed class DashScopeConfig
     public string LlmModel { get; set; } = "qwen-flash";
 
     public int RequestTimeoutMs { get; set; } = 8000;
+    /// <summary>音频推完后等识别结果的上限。正常 0.3 秒内返回；超时就换新连接重试一次。</summary>
+    public int AsrFinishTimeoutMs { get; set; } = 3500;
     /// <summary>把术语表作为识别上下文传给识别服务。实测听不清时模型会把术语表原样吐出来（“撤离，跑路，撤离点……”），默认关闭。</summary>
     public bool UseGlossaryAsAsrContext { get; set; } = false;
+    /// <summary>把术语表里标了 Hotword 的游戏词做成识别热词表（只让发音相近时偏向正确写法，不会被吐出来）。</summary>
+    public bool UseAsrHotwords { get; set; } = true;
 
     /// <summary>可选：直接指定 WebSocket 地址（如千问AI平台 wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference）。</summary>
     public string WebSocketUrlOverride { get; set; } = "";
@@ -207,6 +211,8 @@ public sealed class VadConfig
     public float EndThreshold { get; set; } = 0.35f;
     public int MinSpeechMs { get; set; } = 160;
     public int EndSilenceMs { get; set; } = 450;
+    /// <summary>识别中间结果停在半截（the / of / to…）时，多等到这么久的静音才断句。</summary>
+    public int UnfinishedEndSilenceMs { get; set; } = 1000;
     public int PreRollMs { get; set; } = 300;
     public int MaxUtteranceMs { get; set; } = 12000;
     /// <summary>Silero 不可用时的能量阈值（dBFS）。</summary>
@@ -220,6 +226,9 @@ public sealed class BudgetConfig
     public double TtsYuanPer10kChars { get; set; } = 1.0;
     public double MtYuanPerMInputTokens { get; set; } = 0.7;
     public double MtYuanPerMOutputTokens { get; set; } = 1.95;
+    /// <summary>qwen-audio-3.1-asr-flash-message / -streaming：输入 6 元/百万 token、输出 4.5 元/百万 token。</summary>
+    public double AsrYuanPerMInputTokens { get; set; } = 6.0;
+    public double AsrYuanPerMOutputTokens { get; set; } = 4.5;
     /// <summary>同一句最多重试次数（目前仅用于翻译 HTTP 请求）。</summary>
     public int MaxRetries { get; set; } = 1;
     /// <summary>排队超过该秒数仍未开始播放的译音会被丢弃。</summary>

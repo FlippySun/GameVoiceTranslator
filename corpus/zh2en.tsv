@@ -50,3 +50,17 @@
 # 识别丢了停顿/听错英文词的情况
 先别噗血，等我。	push|!heal
 这个地方可以x feel吗？	exfil
+# 11-22 实测：吃/舔 = 搜刮，阔剑被听错，英文里混中文
+呃，你把这两个人给吃了吧。	loot/grab/take|!eat
+我来守，你直接去吃。	loot|!eat
+呃，你可以先把楼上的东西都吃了。	loot/grab|!eat
+好，里面我什么都没吃，太可惜了。	loot/grab|!starv|!eat
+你快舔，你快舔，把能拿走的全部都拿走。	loot/grab|!get low
+在这门门口放点扩建地雷。	claymore|!expand
+顺便多放点扩肩肌肋。	claymore|!shoulder|!rib
+这里门口放一点扩镜。	claymore|!zoom|!scope
+因为他们有卡，所以他们也能刷…刷卡进来。	swipe/card|!刷
+哎，你来守着，我上去…随便刮一下。	hold/watch|!守
+差不多走吧，就2分钟。	go/move/get out|2/two|!差
+嗯，我推荐你的战术装备带上烟雾弹和扩建地雷。	recommend/bring/take|claymore|!push
+我操，他们好肥呀！	loaded/loot/rich|!beefy|!fat

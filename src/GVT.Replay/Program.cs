@@ -63,7 +63,7 @@ try
             // 打印识别服务返回的原始 JSON（看字级时间戳）
             var key = SecretStore.GetApiKey()!;
             var samples = Load16kMono(args[1]);
-            await using var s = FunAsrSession.Start(cfg.DashScope, key, Opt("--lang", "en"), null);
+            await using var s = FunAsrSession.Start(cfg.DashScope, key, new AsrRequest(Opt("--lang", "en")) { Model = Opt("--asr", "") });
             s.RawMessage += m => { if (m.Contains("\"sentence_end\":true")) Console.WriteLine(m); };
             for (int off = 0; off < samples.Length; off += 1600) { s.Push(samples.AsSpan(off, Math.Min(1600, samples.Length - off))); await Task.Delay(100); }
             Console.WriteLine("最终：" + await s.FinishAsync(CancellationToken.None));
@@ -111,6 +111,14 @@ try
             }
             return 0;
         }
+        case "asr-ab" when args.Length > 1:
+            return await AsrAb.RunAsync(cfg, Glossary.Load(cfg.ResolveGlossaryPath()), SecretStore.GetApiKey()!, args[1],
+                Opt("--variants", "").Split(',', StringSplitOptions.RemoveEmptyEntries), int.Parse(Opt("--limit", "100000")),
+                int.Parse(Opt("--realtime", "0")), Opt("--out", "asr-ab.tsv"));
+        case "vocab-list":
+            foreach (var p in new[] { "gvtzh", "gvten" })
+                Console.WriteLine(p + ": " + string.Join(", ", await AsrVocabulary.ListAsync(cfg.DashScope, SecretStore.GetApiKey()!, p)));
+            return 0;
         case "voice-lab":
             return await VoiceLab(Opt("--out", "voice-lab"));
         case "backchannel-stats" when args.Length > 1:
@@ -277,6 +285,8 @@ async Task<int> RunPipeline(string wavDir, bool fast)
         Tts = isSend ? cfg.Send.ToTts(cfg.DashScope.TtsModel) : cfg.Receive.ToTts(cfg.DashScope.TtsModel),
         SkipIfAlreadyTarget = !isSend,
     }, svc, player, usage);
+    if (cfg.DashScope.UseAsrHotwords)
+        ch.Options.AsrVocabularyId = await svc.EnsureVocabularyAsync(glossary.HotwordsFor(direction), isSend ? "zh" : "en");
 
     var outDir = Path.Combine(wavDir, "out");
     Directory.CreateDirectory(outDir);
@@ -324,6 +334,7 @@ async Task<int> RunPipeline(string wavDir, bool fast)
     stop.Cancel();
     await pump;
 
+    Console.WriteLine("结果：" + string.Join("，", records.GroupBy(r => r.Outcome).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}")));
     var ok = records.Where(r => r.Outcome == "done").ToList();
     PrintPercentiles("句末→识别完成", ok.Select(r => r.EndToAsrMs ?? 0).ToList());
     PrintPercentiles("句末→翻译完成", ok.Select(r => r.EndToMtMs ?? 0).ToList());
@@ -366,7 +377,7 @@ async Task<int> Probe()
             await tts.SpeakAsync("Two on the left, second floor. Don't shoot.", s => bytes += s.Length, CancellationToken.None);
             Console.WriteLine($"✓ 合成 {u}  {sw.ElapsedMilliseconds}ms  {bytes / (double)dc.TtsSampleRate:F1}s 音频");
             sw.Restart();
-            await using var asr = FunAsrSession.Start(dc, key, "zh", null);
+            await using var asr = FunAsrSession.Start(dc, key, new AsrRequest("zh"));
             asr.Push(new float[16000]);
             var text = await asr.FinishAsync(CancellationToken.None);
             Console.WriteLine($"✓ 识别 {u}  {sw.ElapsedMilliseconds}ms（静音测试，结果“{text}”）");

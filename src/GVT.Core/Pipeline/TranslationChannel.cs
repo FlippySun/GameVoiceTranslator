@@ -12,6 +12,11 @@ public sealed class ChannelOptions
     public Direction Direction { get; init; }
     public string? AsrLanguageHint { get; init; }
     public string? AsrContext { get; init; }
+    /// <summary>识别热词（词 → 权重）。</summary>
+    public IReadOnlyDictionary<string, int>? AsrHotwords { get; init; }
+    public bool AsrDisfluencyRemoval { get; init; }
+    /// <summary>预编译热词表 ID（后台建好后填进来，下一句生效）。</summary>
+    public string? AsrVocabularyId { get; set; }
     /// <summary>可在运行中替换（下一句生效）。</summary>
     public TtsVoice Tts { get; set; } = new("", "", 1.0, null, null);
     public int LeadInMs { get; init; }
@@ -103,14 +108,14 @@ public sealed class TranslationChannel
             if (_opt.SaveAudioDir != null) u.Recorded = new List<float>();
             try
             {
-                u.Asr = _services.StartAsr(_opt.AsrLanguageHint, _opt.AsrContext);
+                u.Asr = _services.StartAsr(AsrRequestFor());
             }
             catch (Exception ex)
             {
                 Emit(u.Id, SubtitleKind.Error, "无法开始识别：" + ex.Message);
                 return;
             }
-            u.Asr.Partial += t => Emit(u.Id, SubtitleKind.Partial, t);
+            u.Asr.Partial += t => { u.LastPartial = t; Emit(u.Id, SubtitleKind.Partial, t); };
             u.Asr.Push(preRoll16k);
             u.Recorded?.AddRange(preRoll16k.ToArray());
             _current = u;
@@ -177,6 +182,50 @@ public sealed class TranslationChannel
         SetStage(_enabled ? ChannelStage.Idle : ChannelStage.Off);
     }
 
+    private AsrRequest AsrRequestFor() => new(_opt.AsrLanguageHint, _opt.AsrContext)
+    {
+        Hotwords = _opt.AsrHotwords,
+        VocabularyId = _opt.AsrVocabularyId,
+        DisfluencyRemoval = _opt.AsrDisfluencyRemoval,
+    };
+
+    /// <summary>
+    /// 正在说的这句，识别中间结果是不是停在半截（以 the / of / to / and 之类结尾）。
+    /// 断句时用：是的话多等一会儿再结束这句，免得把一句话切成两半分别翻译。
+    /// </summary>
+    public bool CurrentLooksUnfinished
+    {
+        get
+        {
+            Utterance? u;
+            lock (_lock) u = _current;
+            return u != null && EndsWithFunctionWord(u.LastPartial);
+        }
+    }
+
+    private async Task<string> RetryAsrAsync(float[] audio, CancellationToken ct)
+    {
+        if (audio.Length == 0) throw new TimeoutException("识别超时，且没有可重试的音频");
+        var asr = _services.StartAsr(AsrRequestFor());
+        try
+        {
+            asr.Push(audio);
+            return await asr.FinishAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            ChargeAsr(asr);
+            _ = asr.DisposeAsync().AsTask();
+        }
+    }
+
+    private void ChargeAsr(IAsrSession asr)
+    {
+        var (i, o) = asr.Tokens;
+        if (i + o > 0) _usage.AddAsrTokens(i, o);
+        else _usage.AddAsr(asr.AudioSeconds);
+    }
+
     // ---------- 处理侧 ----------
 
     private bool IsStale(Utterance u) => u.Epoch != Epoch || u.Token.IsCancellationRequested;
@@ -195,10 +244,16 @@ public sealed class TranslationChannel
             var asr = u.Asr ?? throw new InvalidOperationException("没有识别会话");
             string source;
             try { source = (await asr.FinishAsync(u.Token).ConfigureAwait(false)).Trim(); }
+            catch (Exception ex) when (ex is TimeoutException or DashScopeException && !IsStale(u))
+            {
+                // 网络抖动：用缓存的整句音频换一条新连接再识别一次（整句一次推完，通常几百毫秒）
+                Log.Warn($"{_opt.Name}#{u.Id} 识别失败（{ex.Message}），重试一次");
+                source = (await RetryAsrAsync(asr.CapturedAudio, u.Token).ConfigureAwait(false)).Trim();
+            }
             finally
             {
                 rec.AudioSeconds = asr.AudioSeconds;
-                _usage.AddAsr(asr.AudioSeconds);
+                ChargeAsr(asr);
                 _ = asr.DisposeAsync().AsTask();
             }
             rec.EndToAsrMs = MsSinceEnd(u);
@@ -227,6 +282,12 @@ public sealed class TranslationChannel
                 Drop(slot, rec, "backchannel");
                 return;
             }
+            if (_opt.FilterBackchannel && IsDanglingFragment(source))
+            {
+                Emit(u.Id, SubtitleKind.Info, "半句话，不播报");
+                Drop(slot, rec, "fragment");
+                return;
+            }
 
             var context = RecentContext(source);
             var tr = await _services.Translator.TranslateAsync(source, _opt.Direction, context, u.Token).ConfigureAwait(false);
@@ -234,8 +295,21 @@ public sealed class TranslationChannel
             rec.EndToMtMs = MsSinceEnd(u);
             rec.Translation = tr.Text;
             if (IsStale(u)) { Drop(slot, rec, "cancelled"); return; }
+            if (tr.Confidence == TranslationConfidence.Blocked)
+            {
+                Emit(u.Id, SubtitleKind.Dropped, _opt.Direction == Direction.EnToZh ? "内容被平台审核拦截，未播报" : "内容被平台审核拦截，未发送");
+                Drop(slot, rec, "blocked");
+                return;
+            }
             if (tr.Confidence == TranslationConfidence.Garbled)
             {
+                Emit(u.Id, SubtitleKind.Dropped, _opt.Direction == Direction.EnToZh ? "没听清，未播报" : "没听清，未发送，请再说一遍");
+                Drop(slot, rec, "garbled");
+                return;
+            }
+            if (tr.Confidence == TranslationConfidence.Low && IsTooShortToGuess(source))
+            {
+                // 一两个词还没把握：多半是噪音或听错的碎片，硬翻只会编出一句话
                 Emit(u.Id, SubtitleKind.Dropped, _opt.Direction == Direction.EnToZh ? "没听清，未播报" : "没听清，未发送，请再说一遍");
                 Drop(slot, rec, "garbled");
                 return;
@@ -381,10 +455,39 @@ public sealed class TranslationChannel
     {
         var words = System.Text.RegularExpressions.Regex.Matches(text.ToLowerInvariant(), @"[a-z']+").Select(m => m.Value).ToList();
         if (words.Count == 0) return false;
-        if (words.Count == 1) return !Tactical.Contains(words[0]);
+        // 单独一个 right 几乎都是“对/好”，不是方向（方向会说 go right / on the right）
+        if (words.Count == 1) return words[0] == "right" || !Tactical.Contains(words[0]);
         // “go right”“yeah behind”之类含方向/战术词的不算语气词（“let's go”除外）
         return words.Count <= 4 && words.All(Backchannel.Contains) && !words.Any(w => w != "go" && Tactical.Contains(w));
     }
+
+    private static readonly HashSet<string> FunctionWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "the", "a", "an", "of", "for", "to", "with", "and", "or", "but", "on", "in", "at", "from", "into", "about", "by",
+        "my", "your", "his", "her", "their", "our", "its", "this", "that", "these", "those", "some", "any", "is", "are",
+        "was", "were", "be", "i", "i'm", "we", "you", "he", "she", "they", "it's", "there's", "if", "so", "because",
+        "cause", "'cause", "like", "than", "then", "gonna", "wanna", "gotta", "can", "can't", "will", "would", "should",
+    };
+
+    internal static bool EndsWithFunctionWord(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Matches(text.ToLowerInvariant(), @"[a-z']+");
+        return m.Count > 0 && FunctionWords.Contains(m[^1].Value);
+    }
+
+    /// <summary>三个词以内、停在半截的片段（going with / code of / stock up on）：单独翻出来没有意义，模型还会自己补全瞎编。</summary>
+    internal static bool IsDanglingFragment(string text)
+    {
+        var words = System.Text.RegularExpressions.Regex.Matches(text, @"[A-Za-z']+").Count;
+        var t = text.TrimEnd();
+        if (t.EndsWith('?') || t.EndsWith('？') || t.EndsWith('!') || t.EndsWith('！')) return false;
+        return words is > 0 and <= 3 && EndsWithFunctionWord(text);
+    }
+
+    internal static bool IsTooShortToGuess(string text)
+        => TextUtil.CjkRatio(text) > 0.5
+            ? text.Count(TextUtil.IsCjk) <= 3
+            : System.Text.RegularExpressions.Regex.Matches(text, @"[A-Za-z']+").Count <= 2;
 
     /// <summary>空内容、纯标点或纯语气词（hmm、uh、嗯、呃……）不翻译也不播报。</summary>
     internal static bool IsNoise(string text)
@@ -424,5 +527,6 @@ public sealed class TranslationChannel
         public float PanSum { get; set; }
         public float EnergySum { get; set; }
         public List<float>? Recorded { get; set; }
+        public volatile string LastPartial = "";
     }
 }

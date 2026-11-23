@@ -7,7 +7,7 @@ using GVT.Core.Config;
 namespace GVT.Core.Aliyun;
 
 /// <summary>
-/// fun-asr-realtime：一句话一个任务。创建后立刻在后台建连，期间到达的音频先缓存，
+/// 实时识别（fun-asr-realtime / qwen-audio-3.1-asr-flash-message / -streaming，协议相同）：一句话一个任务。创建后立刻在后台建连，期间到达的音频先缓存，
 /// 连上后一次性补发，所以建连时间与用户说话时间重叠，不增加句末延迟。
 /// </summary>
 public sealed class FunAsrSession : IAsrSession
@@ -25,6 +25,7 @@ public sealed class FunAsrSession : IAsrSession
     private readonly object _lock = new();
     private string _partial = "";
     private long _samples;
+    private int _inTokens, _outTokens;
     private DashScopeSocket? _socket;
     private Task? _run;
 
@@ -32,6 +33,9 @@ public sealed class FunAsrSession : IAsrSession
     public event Action<string>? RawMessage;
     public event Action<string>? Partial;
     public double AudioSeconds => Interlocked.Read(ref _samples) / 16000.0;
+    public (int Input, int Output) Tokens => (_inTokens, _outTokens);
+    public float[] CapturedAudio { get { lock (_pcm) return _pcm.ToArray(); } }
+    public string Model { get; private set; } = "";
 
     private FunAsrSession(DashScopeConfig cfg, string apiKey)
     {
@@ -39,10 +43,10 @@ public sealed class FunAsrSession : IAsrSession
         _apiKey = apiKey;
     }
 
-    public static FunAsrSession Start(DashScopeConfig cfg, string apiKey, string? languageHint, string? contextText)
+    public static FunAsrSession Start(DashScopeConfig cfg, string apiKey, AsrRequest req)
     {
-        var s = new FunAsrSession(cfg, apiKey);
-        s._run = Task.Run(() => s.RunAsync(languageHint, contextText));
+        var s = new FunAsrSession(cfg, apiKey) { Model = string.IsNullOrWhiteSpace(req.Model) ? cfg.AsrModel : req.Model! };
+        s._run = Task.Run(() => s.RunAsync(req));
         return s;
     }
 
@@ -54,7 +58,7 @@ public sealed class FunAsrSession : IAsrSession
         _audio.Writer.TryWrite(PcmConvert.FloatToPcm16(samples16k));
     }
 
-    private async Task RunAsync(string? languageHint, string? contextText)
+    private async Task RunAsync(AsrRequest req)
     {
         try
         {
@@ -68,11 +72,10 @@ public sealed class FunAsrSession : IAsrSession
                 _finished.TrySetException(err);
             };
 
-            var parameters = new Dictionary<string, object> { ["format"] = "pcm", ["sample_rate"] = 16000 };
-            if (!string.IsNullOrWhiteSpace(languageHint)) parameters["language_hints"] = new[] { languageHint };
-            object input = string.IsNullOrWhiteSpace(contextText)
+            var parameters = BuildParameters(Model, req);
+            object input = string.IsNullOrWhiteSpace(req.Context)
                 ? new { }
-                : new { context = new[] { new { role = "user", content = new[] { new { type = "input_text", text = contextText } } } } };
+                : new { context = new[] { new { role = "user", content = new[] { new { type = "input_text", text = req.Context } } } } };
 
             await _socket.SendJsonAsync(new
             {
@@ -82,7 +85,7 @@ public sealed class FunAsrSession : IAsrSession
                     task_group = "audio",
                     task = "asr",
                     function = "recognition",
-                    model = _cfg.AsrModel,
+                    model = Model,
                     parameters,
                     input,
                 },
@@ -116,6 +119,22 @@ public sealed class FunAsrSession : IAsrSession
         }
     }
 
+    /// <summary>qwen-audio 系列支持即时热词、文本润色，且默认不返回中间结果（要手动打开，字幕和断句判断都要用）。</summary>
+    internal static Dictionary<string, object> BuildParameters(string model, AsrRequest req)
+    {
+        var p = new Dictionary<string, object> { ["format"] = "pcm", ["sample_rate"] = 16000 };
+        if (!string.IsNullOrWhiteSpace(req.LanguageHint)) p["language_hints"] = new[] { req.LanguageHint };
+        bool qwenAudio = model.StartsWith("qwen-audio", StringComparison.OrdinalIgnoreCase);
+        if (qwenAudio && req.Hotwords is { Count: > 0 }) p["vocabulary"] = req.Hotwords;
+        if (!string.IsNullOrWhiteSpace(req.VocabularyId)) p["vocabulary_id"] = req.VocabularyId!;
+        if (model.Contains("-message", StringComparison.OrdinalIgnoreCase))
+        {
+            p["intermediate_result_enabled"] = true;
+            if (req.DisfluencyRemoval) p["disfluency_removal_enabled"] = true;
+        }
+        return p;
+    }
+
     private void OnJson(JsonElement msg)
     {
         RawMessage?.Invoke(msg.GetRawText());
@@ -128,6 +147,7 @@ public sealed class FunAsrSession : IAsrSession
                 HandleResult(msg);
                 break;
             case "task-finished":
+                ReadUsage(msg);
                 _finished.TrySetResult(FinalText());
                 break;
             case "task-failed":
@@ -135,6 +155,15 @@ public sealed class FunAsrSession : IAsrSession
                 _started.TrySetException(err);
                 _finished.TrySetException(err);
                 break;
+        }
+    }
+
+    private void ReadUsage(JsonElement msg)
+    {
+        if (msg.TryGetProperty("payload", out var p) && p.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object)
+        {
+            if (u.TryGetProperty("input_tokens", out var i) && i.ValueKind == JsonValueKind.Number) _inTokens = i.GetInt32();
+            if (u.TryGetProperty("output_tokens", out var o) && o.ValueKind == JsonValueKind.Number) _outTokens = o.GetInt32();
         }
     }
 
@@ -196,7 +225,7 @@ public sealed class FunAsrSession : IAsrSession
     public async Task<string> FinishAsync(CancellationToken ct)
     {
         _audio.Writer.TryComplete();
-        return await _finished.Task.WaitAsync(TimeSpan.FromMilliseconds(_cfg.RequestTimeoutMs), ct).ConfigureAwait(false);
+        return await _finished.Task.WaitAsync(TimeSpan.FromMilliseconds(_cfg.AsrFinishTimeoutMs), ct).ConfigureAwait(false);
     }
 
     public void Abort()

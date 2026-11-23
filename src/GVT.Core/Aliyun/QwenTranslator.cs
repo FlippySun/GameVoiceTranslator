@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using GVT.Core.Config;
+using GVT.Core.Pipeline;
 
 namespace GVT.Core.Aliyun;
 
@@ -49,15 +50,103 @@ public sealed class QwenTranslator : ITranslator
 
     public async Task<TranslationResult> TranslateAsync(string text, Direction direction, IReadOnlyList<string> recentContext, CancellationToken ct)
     {
-        object body = _cfg.Translator == TranslatorKind.Mt ? BuildMtBody(text, direction) : BuildLlmBody(text, direction, recentContext);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(_cfg.RequestTimeoutMs);
+        try
+        {
+            if (_cfg.Translator == TranslatorKind.Mt)
+            {
+                var (content, i, o) = await CompleteAsync(BuildMtBody(text, direction), timeout.Token).ConfigureAwait(false);
+                return Finish(text, Clean(content), TranslationConfidence.High, direction, i, o);
+            }
 
+            var (system, user) = BuildLlmMessages(text, direction, recentContext);
+            var messages = new List<object> { new { role = "system", content = system }, new { role = "user", content = user } };
+            var (c1, in1, out1) = await CompleteAsync(LlmBody(messages), timeout.Token).ConfigureAwait(false);
+            var (t1, conf1) = ParseJson(c1);
+            t1 = Clean(t1);
+            var problem = conf1 is TranslationConfidence.Garbled ? null : Problem(text, t1, direction);
+            if (problem == null) return new TranslationResult(t1, in1, out1, conf1);
+
+            // 译文混进了另一种语言、或者只剩一串数字：指出问题让模型重翻一次
+            Log.Info($"译文不合格（{problem}），重翻：{text} → {t1}");
+            messages.Add(new { role = "assistant", content = c1 });
+            messages.Add(new { role = "user", content = "Your translation is invalid: " + problem + " Return the JSON again." });
+            var (c2, in2, out2) = await CompleteAsync(LlmBody(messages), timeout.Token).ConfigureAwait(false);
+            var (t2, conf2) = ParseJson(c2);
+            return Finish(text, Clean(t2), conf2, direction, in1 + in2, out1 + out2);
+        }
+        catch (DashScopeException ex) when (ex.Message.Contains("data_inspection_failed"))
+        {
+            // 平台审核拦截（多半是骂人的话）：不播报，也不当成故障
+            return new TranslationResult("", 0, 0, TranslationConfidence.Blocked);
+        }
+    }
+
+    /// <summary>重翻后仍不合格时的兜底：英文里的中文去掉；只剩数字的当没听清；中文里剩几个英文词可以接受。</summary>
+    private static TranslationResult Finish(string source, string t, TranslationConfidence conf, Direction d, int inTok, int outTok)
+    {
+        var problem = conf is TranslationConfidence.Garbled ? null : Problem(source, t, d);
+        if (problem == null) return new TranslationResult(t, inTok, outTok, conf);
+        if (d == Direction.ZhToEn && t.Any(TextUtil.IsCjk))
+        {
+            var stripped = System.Text.RegularExpressions.Regex.Replace(new string(t.Select(ch => TextUtil.IsCjk(ch) ? ' ' : ch).ToArray()), @"\s{2,}", " ").Trim(' ', ',', '，');
+            // 去掉中文后句子断了（“short on the .”）就别发了，让用户再说一遍
+            return stripped.Any(char.IsLetter) && !TranslationChannel.EndsWithFunctionWord(stripped)
+                ? new TranslationResult(stripped, inTok, outTok, TranslationConfidence.Low)
+                : new TranslationResult("", inTok, outTok, TranslationConfidence.Garbled);
+        }
+        if (IsOnlyNumber(t)) return new TranslationResult("", inTok, outTok, TranslationConfidence.Garbled);
+        return new TranslationResult(t, inTok, outTok, conf);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex NumberWords = new(
+        @"\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|oh|o)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static bool IsOnlyNumber(string t) => t.Any(char.IsDigit) && !t.Any(char.IsLetter);
+
+    /// <summary>检查译文是否合格；合格返回 null，否则返回给模型看的问题说明。</summary>
+    internal static string? Problem(string source, string translation, Direction d)
+    {
+        if (string.IsNullOrWhiteSpace(translation)) return null;
+        if (IsOnlyNumber(translation))
+        {
+            // 原句里除了数字还有别的词，译文却只剩数字；或者凭空多出小数点、冒号（“301”→“301.201”，“oh four six”→“0.46”）
+            var otherWords = System.Text.RegularExpressions.Regex.Matches(source, @"[A-Za-z']+").Count(m => !NumberWords.IsMatch(m.Value));
+            bool sourceHasNumber = source.Any(char.IsDigit) || NumberWords.IsMatch(source) || source.Any(c => "零一二三四五六七八九十百千两".Contains(c));
+            var srcCore = source.TrimEnd('.', '!', '?', '。', '！', '？', '…', ' ');
+            bool inventedPunct = translation.Count(c => c is '.' or ':') > srcCore.Count(c => c is '.' or ':');
+            if (!sourceHasNumber || otherWords > 0 || inventedPunct)
+                return "it is only a number, which is not what the message says. Translate the words, and keep numbers exactly as spoken.";
+        }
+        if (d == Direction.ZhToEn)
+            return translation.Any(TextUtil.IsCjk) ? "it still contains Chinese characters. Output natural English only." : null;
+        var leftovers = System.Text.RegularExpressions.Regex.Matches(translation, @"[A-Za-z][A-Za-z']+")
+            .Select(m => m.Value)
+            .Where(w => !IsAllowedLatin(w, source))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return leftovers.Count > 0 ? $"it still contains English words ({string.Join(", ", leftovers)}). Output Simplified Chinese only." : null;
+    }
+
+    /// <summary>中文译文里允许保留的拉丁字母：缩写（DMZ、UAV、AI、OK）和原句里大写开头的专名（玩家名、枪名）。</summary>
+    private static bool IsAllowedLatin(string w, string source)
+    {
+        if (w.All(c => !char.IsLetter(c) || char.IsUpper(c))) return true;
+        if (!char.IsUpper(w[0])) return false;
+        var idx = source.IndexOf(w, StringComparison.Ordinal);
+        // 句首的大写词不算专名（Okay / Right / Jesus 之类）
+        return idx > 0 && source[..idx].TrimEnd().Length > 0 && !".!?。！？…".Contains(source[..idx].TrimEnd()[^1]);
+    }
+
+    private async Task<(string Content, int In, int Out)> CompleteAsync(object body, CancellationToken ct)
+    {
         using var req = new HttpRequestMessage(HttpMethod.Post, _cfg.CompatibleBaseUrl.TrimEnd('/') + "/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
         req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        using var resp = await Http.SendAsync(req, timeout.Token).ConfigureAwait(false);
-        var json = await resp.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+        using var resp = await Http.SendAsync(req, ct).ConfigureAwait(false);
+        var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
             throw new DashScopeException($"翻译请求失败 HTTP {(int)resp.StatusCode}: {Truncate(json, 300)}");
 
@@ -70,12 +159,7 @@ public sealed class QwenTranslator : ITranslator
             if (u.TryGetProperty("prompt_tokens", out var pt)) inTok = pt.GetInt32();
             if (u.TryGetProperty("completion_tokens", out var ctk)) outTok = ctk.GetInt32();
         }
-        if (_cfg.Translator == TranslatorKind.Llm)
-        {
-            var (t, c) = ParseJson(content);
-            return new TranslationResult(Clean(t), inTok, outTok, c);
-        }
-        return new TranslationResult(Clean(content), inTok, outTok);
+        return (content, inTok, outTok);
     }
 
     /// <summary>解析 {"t": 译文, "c": "high|low|garbled"}；模型偶尔不按格式输出时按普通文本处理。</summary>
@@ -140,7 +224,7 @@ public sealed class QwenTranslator : ITranslator
         };
     }
 
-    private object BuildLlmBody(string text, Direction direction, IReadOnlyList<string> recentContext)
+    internal (string System, string User) BuildLlmMessages(string text, Direction direction, IReadOnlyList<string> recentContext)
     {
         bool toEn = direction == Direction.ZhToEn;
         var (src, tgt) = toEn ? ("Chinese", "English") : ("English", "Simplified Chinese");
@@ -160,14 +244,18 @@ public sealed class QwenTranslator : ITranslator
         {
             sb.AppendLine("- Keep the subject exactly. 我破甲了 = my armor is broken; 他破甲了 = he's cracked (his armor is broken).")
               .AppendLine("- 倒地/倒了 = downed (can be revived); 死/击杀 = dead/killed. 已经 = already, 还没 = not yet.")
-              .AppendLine("- 拉我/扶我/救我 = revive me / pick me up. 跑/快跑/跑路 = run / get out of here (not exfil unless 撤离 is said).");
+              .AppendLine("- 拉我/扶我/救我 = revive me / pick me up. 跑/快跑/跑路 = run / get out of here (not exfil unless 撤离 is said).")
+              .AppendLine("- 我去 + a place or action = I'm going (to ...). Only a standalone 我去！ is an exclamation.")
+              .AppendLine("- Gamer slang: 吃 / 舔 / 舔包 / 摸 (吃东西, 去吃, 把他吃了, 吃完) mean loot / grab the loot, never eat (only 吃饭 is real food). 肥 = loaded with loot. 人机 = AI bots.");
         }
         else
         {
             sb.AppendLine("- down/downed = 倒地 (can be revived); dead/killed = 死了/击杀. already = 已经, not yet = 还没.")
-              .AppendLine("- Do not turn ordinary words into game jargon: only say 撤离 when the speaker clearly says exfil / extract.");
+              .AppendLine("- Do not turn ordinary words into game jargon: only say 撤离 when the speaker clearly says exfil / extract.")
+              .AppendLine("- Translate idioms, slang and exclamations by meaning, not word by word (an exclamation like \"Jesus\" or \"oh my god\" is 天哪 / 我的天).");
         }
-        sb.AppendLine("- Misheard words: fix a word only when the intended word is obvious from the sentence and the game context; otherwise translate what is there literally and lower the confidence.")
+        sb.AppendLine("- If the message is an incomplete fragment, translate only the words that are there. Never invent the missing part or add a subject, place or action that was not said; a fragment that means nothing on its own is garbled.");
+    sb.AppendLine("- Misheard words: fix a word only when the intended word is obvious from the sentence and the game context; otherwise translate what is there literally and lower the confidence.")
           .AppendLine("- Do not add profanity or slurs that are not in the original; tone down extreme insults.");
         if (relevant.Count > 0)
             sb.AppendLine("Glossary (use only if the word appears): " + string.Join("; ", relevant.Select(t => $"{t.Source} => {t.Target}")));
@@ -178,19 +266,17 @@ public sealed class QwenTranslator : ITranslator
           .AppendLine("c = low: some words were probably misheard, the translation is a best guess.")
           .AppendLine("c = garbled: the message is mostly unintelligible, a broken fragment, or not a real sentence (then t can be empty).");
 
-        return new
-        {
-            model = _cfg.LlmModel,
-            temperature = 0.0,
-            enable_thinking = false,
-            response_format = new { type = "json_object" },
-            messages = new object[]
-            {
-                new { role = "system", content = sb.ToString() },
-                new { role = "user", content = text },
-            },
-        };
+        return (sb.ToString(), text);
     }
+
+    private object LlmBody(List<object> messages) => new
+    {
+        model = _cfg.LlmModel,
+        temperature = 0.0,
+        enable_thinking = false,
+        response_format = new { type = "json_object" },
+        messages,
+    };
 
     private static string Clean(string s)
     {

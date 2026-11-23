@@ -308,7 +308,11 @@
                                            Text="点击左侧按钮开始翻译。"/>
                                 <Border x:Name="WarnBox" Style="{StaticResource Chip}" Background="{StaticResource B.DangerSoft}" HorizontalAlignment="Left"
                                         Margin="0,10,0,0" Padding="10,6" CornerRadius="8" Visibility="Collapsed">
-                                    <TextBlock x:Name="WarnText" Foreground="{StaticResource B.Danger}" FontSize="12.5" TextWrapping="Wrap" MaxWidth="460"/>
+                                    <StackPanel>
+                                        <TextBlock x:Name="WarnText" Foreground="{StaticResource B.Danger}" FontSize="12.5" TextWrapping="Wrap" MaxWidth="460"/>
+                                        <Button x:Name="ExtendBudgetBtn" Style="{StaticResource BtnPrimary}" Content="再加 ¥5 继续" HorizontalAlignment="Left"
+                                                Margin="0,8,0,0" Padding="12,5" Visibility="Collapsed" Click="ExtendBudget_Click"/>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                             <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="250">

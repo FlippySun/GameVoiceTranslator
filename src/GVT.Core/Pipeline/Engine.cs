@@ -119,6 +119,7 @@ public sealed class Engine : IDisposable
             SaveAudioDir = _cfg.Debug.SaveUtteranceAudio ? Path.Combine(Log.LogDirectory, "utterances") : null,
         }, _services, player, _usage) { Enabled = c.Enabled };
         Wire(Send);
+        AttachVocabulary(Send, Direction.ZhToEn, "zh");
         Send.Translated += _echo.AddOutgoing;
 
         _mic = Track(new CaptureSource(micDev));
@@ -176,6 +177,7 @@ public sealed class Engine : IDisposable
             LowConfidencePrefix = c.LowConfidencePrefix,
         }, _services, player, _usage) { Enabled = c.Enabled };
         Wire(Receive);
+        AttachVocabulary(Receive, Direction.EnToZh, "en");
         Receive.ShouldDropSource = _echo.IsEcho;
 
         var vad = Track(VoiceDetectorFactory.Create(_cfg.Vad, _baseDir, Log.Warn));
@@ -183,6 +185,7 @@ public sealed class Engine : IDisposable
         _recvVad.SpeechStart += pre => Receive.BeginUtterance(pre);
         _recvVad.SpeechAudio += a => Receive.PushAudio(a, _lastPan);
         _recvVad.SpeechEnd += () => Receive.EndUtterance();
+        _recvVad.LooksUnfinished = () => Receive.CurrentLooksUnfinished;
 
         _source = Track(new CaptureSource(srcDev));
         _srcDown = new MonoDownmixer(_source.SampleRate, _source.Channels);
@@ -192,6 +195,18 @@ public sealed class Engine : IDisposable
         _hpOut.Start();
         _source.Start();
         Log.Info($"接收：{srcDev.FriendlyName} → {hpDev.FriendlyName}（VAD：{vad.Name}）");
+    }
+
+    /// <summary>后台准备识别热词表，建好后从下一句开始生效；失败就不用热词。</summary>
+    private void AttachVocabulary(TranslationChannel ch, Direction dir, string lang)
+    {
+        if (!_cfg.DashScope.UseAsrHotwords) return;
+        var words = _glossary.HotwordsFor(dir);
+        _ = Task.Run(async () =>
+        {
+            var id = await _services.EnsureVocabularyAsync(words, lang).ConfigureAwait(false);
+            if (id != null) ch.Options.AsrVocabularyId = id;
+        });
     }
 
     private void Wire(TranslationChannel ch)
@@ -323,15 +338,33 @@ public sealed class Engine : IDisposable
         Receive?.Enabled ?? false, Receive?.Stage ?? ChannelStage.Off, _source?.LastPeakDb ?? -120, Receive?.Player.BacklogSeconds ?? 0,
         _holdOriginal, _usage.ToString(), _warning);
 
+    /// <summary>到达预算后两个方向都暂停；界面上可以一键追加额度继续。</summary>
+    public bool BudgetPaused { get; private set; }
+    private bool _sendBeforePause, _recvBeforePause;
+
     private void OnUsageChanged()
     {
-        if (!_usage.OverBudget) return;
+        if (!_usage.OverBudget || BudgetPaused) return;
         if (Send?.Enabled == true || Receive?.Enabled == true)
         {
+            _sendBeforePause = Send?.Enabled == true;
+            _recvBeforePause = Receive?.Enabled == true;
+            BudgetPaused = true;
             if (Send != null) Send.Enabled = false;
             if (Receive != null) Receive.Enabled = false;
-            Warn($"已达到本次预算 ¥{_usage.BudgetYuan:F2}，两个方向都已暂停。可在设置里调高预算后重启。");
+            Warn($"已达到本次预算 ¥{_usage.BudgetYuan:F2}，两个方向都已暂停（原声照常）。可以点“再加 ¥5 继续”。");
         }
+    }
+
+    public void ExtendBudget(double yuan)
+    {
+        _usage.ExtraBudgetYuan += yuan;
+        BudgetPaused = false;
+        _warning = "";
+        if (Send != null) Send.Enabled = _sendBeforePause;
+        if (Receive != null) Receive.Enabled = _recvBeforePause;
+        Log.Info($"预算追加 ¥{yuan:F0}，现在 ¥{_usage.BudgetYuan:F0}");
+        StatusChanged?.Invoke();
     }
 
     private void DeviceLost(string what, Exception? ex, bool isSend)

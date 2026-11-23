@@ -53,7 +53,7 @@ public class ChannelTests
         public FakeTranslator Fake { get; } = new();
         public ITranslator Translator => Fake;
         public int TtsSampleRate => 16000;
-        public IAsrSession StartAsr(string? h, string? c)
+        public IAsrSession StartAsr(AsrRequest r)
         {
             var a = new FakeAsr(AsrResults.Dequeue());
             Asrs.Add(a);

@@ -117,3 +117,92 @@ public class RecognitionQualityTests
         Assert.Empty(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.EnToZh, "exfiltration"));
     }
 }
+
+public class Round3Tests
+{
+    [Theory]
+    [InlineData("they're upstairs, right?", "2103.547", Direction.EnToZh, true)]
+    [InlineData("the same thing.", "-1", Direction.EnToZh, true)]
+    [InlineData("26", "26", Direction.EnToZh, false)]
+    [InlineData("three three", "33", Direction.EnToZh, false)]
+    [InlineData("Oh, definitely.", "嗯， definitely。", Direction.EnToZh, true)]
+    [InlineData("Right.", "right", Direction.EnToZh, true)]
+    [InlineData("Oh shit.", "哦 shit。", Direction.EnToZh, true)]
+    [InlineData("We need a UAV over at Florio's place", "我们需要在 Florio 那边放个UAV", Direction.EnToZh, false)]
+    [InlineData("DMZ orders for it.", "DMZ的任务是这个。", Direction.EnToZh, false)]
+    [InlineData("因为他们有卡，所以他们也能刷卡进来。", "They got cards, so they can刷 too.", Direction.ZhToEn, true)]
+    [InlineData("你来守着", "you守 it", Direction.ZhToEn, true)]
+    [InlineData("走吧", "Let's go.", Direction.ZhToEn, false)]
+    public void Problem_DetectsMixedLanguageAndNumberGarbage(string src, string tr, Direction d, bool bad)
+        => Assert.Equal(bad, GVT.Core.Aliyun.QwenTranslator.Problem(src, tr, d) != null);
+
+    [Theory]
+    [InlineData("going with.", true)]
+    [InlineData("stock up on.", true)]
+    [InlineData("code of.", true)]
+    [InlineData("Can you?", false)]
+    [InlineData("the case.", false)]
+    [InlineData("Okay, we'll connect to.", false)]
+    [InlineData("sniper.", false)]
+    public void DanglingFragment_ShortAndUnfinished(string text, bool frag)
+        => Assert.Equal(frag, GVT.Core.Pipeline.TranslationChannel.IsDanglingFragment(text));
+
+    [Fact]
+    public void Glossary_MisheardOnlyForTranslation_NotHotwords()
+    {
+        var g = new Glossary { Entries = { new GlossaryEntry { Zh = "阔剑地雷", En = "claymore", ZhAliases = { "阔剑" }, Misheard = { "扩建地雷" }, Hotword = true }, new GlossaryEntry { Zh = "撤离", En = "exfil" } } };
+        var hot = g.HotwordsFor(Direction.ZhToEn);
+        Assert.Contains("阔剑地雷", hot.Keys);
+        Assert.Contains("阔剑", hot.Keys);
+        Assert.DoesNotContain("扩建地雷", hot.Keys);
+        Assert.DoesNotContain("撤离", hot.Keys);
+        Assert.Single(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.ZhToEn, "门口放点扩建地雷"));
+    }
+
+    [Fact]
+    public void DefaultGlossary_HasNoSingleCharPush()
+    {
+        var g = Glossary.Load(Path.Combine(AudioTests.FindRepoRoot(), "src", "GVT.App", "glossary.default.json"));
+        Assert.Empty(GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.ZhToEn, "我推荐你带烟雾弹"));
+        Assert.Contains(("扩肩", "claymore"), GVT.Core.Aliyun.QwenTranslator.RelevantTerms(g, Direction.ZhToEn, "顺便多放点扩肩肌肋"));
+        Assert.DoesNotContain("撤离", g.HotwordsFor(Direction.ZhToEn).Keys);
+    }
+
+    [Fact]
+    public void Vad_WaitsLongerWhenSentenceLooksUnfinished()
+    {
+        int ends = 0;
+        var cfg = new VadConfig { EndSilenceMs = 300, UnfinishedEndSilenceMs = 900, MinSpeechMs = 64 };
+        var seg = new GVT.Core.Audio.VadSegmenter(new StubVad(), cfg) { LooksUnfinished = () => true };
+        seg.SpeechEnd += () => ends++;
+        StubVad.P = 0.9f; seg.Push(new float[16000]);
+        StubVad.P = 0.0f; seg.Push(new float[16 * 500]);
+        Assert.Equal(0, ends); // 500 ms 静音：普通情况早该断句了，但这句没说完
+        seg.Push(new float[16 * 500]);
+        Assert.Equal(1, ends);
+    }
+
+    private sealed class StubVad : GVT.Core.Audio.IVoiceDetector
+    {
+        public static float P;
+        public string Name => "stub";
+        public float Process(ReadOnlySpan<float> frame) => P;
+        public void Reset() { }
+        public void Dispose() { }
+    }
+}
+
+public class Round3NumberTests
+{
+    [Theory]
+    [InlineData("and 301 inside.", "301.201", true)]
+    [InlineData("Oh four six.", "0.46", true)]
+    [InlineData("200.", "200", false)]
+    [InlineData("26", "26", false)]
+    [InlineData("three three", "33", false)]
+    public void Problem_CatchesNumberGarbage(string src, string tr, bool bad)
+        => Assert.Equal(bad, GVT.Core.Aliyun.QwenTranslator.Problem(src, tr, Direction.EnToZh) != null);
+
+    [Fact]
+    public void LoneRight_IsBackchannel() => Assert.True(GVT.Core.Pipeline.TranslationChannel.IsBackchannel("Right."));
+}

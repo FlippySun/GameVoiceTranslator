@@ -115,7 +115,11 @@ public sealed class UsageMeter(BudgetConfig budget)
     public long TtsChars { get; private set; }
     public long MtInputTokens { get; private set; }
     public long MtOutputTokens { get; private set; }
-    public double BudgetYuan => budget.SessionBudgetYuan;
+    public long AsrInputTokens { get; private set; }
+    public long AsrOutputTokens { get; private set; }
+    /// <summary>到达预算后用户点“再加一些继续”追加的额度。</summary>
+    public double ExtraBudgetYuan { get; set; }
+    public double BudgetYuan => budget.SessionBudgetYuan + ExtraBudgetYuan;
 
     public event Action? Changed;
 
@@ -127,13 +131,17 @@ public sealed class UsageMeter(BudgetConfig budget)
                 return AsrSeconds * budget.AsrYuanPerSecond
                        + TtsChars / 10000.0 * budget.TtsYuanPer10kChars
                        + MtInputTokens / 1e6 * budget.MtYuanPerMInputTokens
-                       + MtOutputTokens / 1e6 * budget.MtYuanPerMOutputTokens;
+                       + MtOutputTokens / 1e6 * budget.MtYuanPerMOutputTokens
+                       + AsrInputTokens / 1e6 * budget.AsrYuanPerMInputTokens
+                       + AsrOutputTokens / 1e6 * budget.AsrYuanPerMOutputTokens;
         }
     }
 
     public bool OverBudget => BudgetYuan > 0 && CostYuan >= BudgetYuan;
 
     public void AddAsr(double seconds) { lock (_lock) AsrSeconds += Math.Ceiling(seconds); Changed?.Invoke(); }
+    /// <summary>qwen-audio 系列识别按 token 计费。</summary>
+    public void AddAsrTokens(int input, int output) { lock (_lock) { AsrInputTokens += input; AsrOutputTokens += output; } Changed?.Invoke(); }
     public void AddTts(int chars) { lock (_lock) TtsChars += chars; Changed?.Invoke(); }
     public void AddMt(int inTok, int outTok) { lock (_lock) { MtInputTokens += inTok; MtOutputTokens += outTok; } Changed?.Invoke(); }
 

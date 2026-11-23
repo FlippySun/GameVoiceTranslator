@@ -23,3 +23,11 @@ Left... no, right building	右|!左
 left… no… right building.	右|!撤
 he is down. no wait, he is dead.	死|!撤
 go up… no… downstairs.	下|!撤
+# 11-22 实测：中文里混英文、只剩数字、补全瞎编
+Oh, definitely.	当然/肯定/绝对|!definitely
+Right.	对/好/行|!right
+they're upstairs, right?	楼
+the same thing.	一样/同样|!-1
+Oh shit.	!shit
+Make some room, Jesus.	!耶稣
+Big forr.	!大个子
