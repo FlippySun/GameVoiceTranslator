@@ -17,7 +17,7 @@
     <Description>游戏内双向语音翻译：你说中文队友听英文，队友说英文你听中文</Description>
     <Company>游戏双译</Company>
     <Copyright>© 2026</Copyright>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <!-- 只保留中文资源，安装包更小 -->
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>

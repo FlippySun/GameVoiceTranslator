@@ -51,7 +51,7 @@
 游戏音效：直接走游戏自己的输出设备到耳机，不经过本软件。
 ```
 
-云端服务全部使用 **阿里云百炼（北京）**：`fun-asr-realtime` 实时识别（带游戏热词）、`qwen-flash` 翻译、`qwen3-tts-flash` / `qwen-audio-3.1-tts-flash` 合成。
+云端服务全部使用 **阿里云百炼（北京）**：`qwen3-asr-flash-realtime`（队友英文，自动判断语种）和 `fun-asr-realtime`（我的中文，带游戏热词）实时识别、`qwen-flash` 翻译、`qwen3-tts-flash` / `qwen-audio-3.1-tts-flash` 合成。
 平均每句从说完到对方开始听到约 **0.8 秒**。
 
 ## 📦 下载与安装
