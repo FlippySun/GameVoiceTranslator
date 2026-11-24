@@ -59,3 +59,29 @@ public class AsrModelTests
     public void Qwen3StyleBackchannel_IsNotSpoken(string text)
         => Assert.True(TranslationChannel.IsBackchannel(text) || TranslationChannel.IsNoise(text), text);
 }
+
+/// <summary>英译中时译文凭空多出原句没有的游戏词（把半句话脑补完整）。</summary>
+public class InventedTermTests
+{
+    private static readonly Glossary G = Glossary.Load(Path.Combine(AudioTests.FindRepoRoot(), "src", "GVT.App", "glossary.default.json"));
+
+    [Theory]
+    // 2026-11-23 实际出现的：原句没说 exfil，译文却补出了“撤离点”
+    [InlineData("I think Ryan and Talia are headed to get.", "我觉得 Ryan 和 Talia 正往撤离点去。", "撤离点")]
+    [InlineData("Let's go.", "我们撤离吧。", "撤离")]
+    [InlineData("He's over there.", "他在保险箱那边。", "保险箱")]
+    public void FlagsTermsTheSpeakerNeverSaid(string src, string tr, string term)
+        => Assert.Equal(term, G.InventedTerm(src, tr));
+
+    [Theory]
+    [InlineData("Let's head to the exfil point.", "我们去撤离点。")]
+    [InlineData("Head to exfil.", "去撤离点。")]
+    [InlineData("I'm extracting now.", "我现在撤离。")]
+    [InlineData("There's a safe on the second floor.", "二楼有个保险箱。")]
+    [InlineData("Out of here.", "撤了。")]
+    [InlineData("The guys didn't make it.", "那几个人没撤出来。")]
+    [InlineData("Was there only five items?", "只有五个物资吗？")]
+    [InlineData("Put a claymore down.", "放个阔剑地雷。")]
+    public void AcceptsTermsThatHaveASource(string src, string tr)
+        => Assert.Null(G.InventedTerm(src, tr));
+}

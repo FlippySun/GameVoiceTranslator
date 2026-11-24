@@ -65,16 +65,20 @@ public sealed class QwenTranslator : ITranslator
             var (c1, in1, out1) = await CompleteAsync(LlmBody(messages), timeout.Token).ConfigureAwait(false);
             var (t1, conf1) = ParseJson(c1);
             t1 = Clean(t1);
-            var problem = conf1 is TranslationConfidence.Garbled ? null : Problem(text, t1, direction);
+            var problem = conf1 is TranslationConfidence.Garbled ? null : Problem(text, t1, direction) ?? InventedProblem(text, t1, direction);
             if (problem == null) return new TranslationResult(t1, in1, out1, conf1);
 
-            // 译文混进了另一种语言、或者只剩一串数字：指出问题让模型重翻一次
+            // 译文混进了另一种语言、只剩一串数字、或者凭空多出原句没有的游戏词：指出问题让模型重翻一次
             Log.Info($"译文不合格（{problem}），重翻：{text} → {t1}");
             messages.Add(new { role = "assistant", content = c1 });
             messages.Add(new { role = "user", content = "Your translation is invalid: " + problem + " Return the JSON again." });
             var (c2, in2, out2) = await CompleteAsync(LlmBody(messages), timeout.Token).ConfigureAwait(false);
             var (t2, conf2) = ParseJson(c2);
-            return Finish(text, Clean(t2), conf2, direction, in1 + in2, out1 + out2);
+            var result = Finish(text, Clean(t2), conf2, direction, in1 + in2, out1 + out2);
+            // 重翻后还是多出了原句没有的词：照常播报，但标成“可能是……”
+            if (result.Confidence == TranslationConfidence.High && InventedProblem(text, result.Text, direction) != null)
+                result = result with { Confidence = TranslationConfidence.Low };
+            return result;
         }
         catch (DashScopeException ex) when (ex.Message.Contains("data_inspection_failed"))
         {
@@ -105,6 +109,15 @@ public sealed class QwenTranslator : ITranslator
         System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static bool IsOnlyNumber(string t) => t.Any(char.IsDigit) && !t.Any(char.IsLetter);
+
+    /// <summary>英译中时译文里凭空多出原句没有的游戏词（多半是把半句话脑补完整了）：返回给模型看的问题说明。</summary>
+    internal string? InventedProblem(string source, string translation, Direction d)
+    {
+        if (d != Direction.EnToZh || string.IsNullOrWhiteSpace(translation)) return null;
+        var term = _glossary.InventedTerm(source, translation);
+        return term == null ? null
+            : $"it adds \"{term}\", which the original never says. Translate only the words that are there and never complete a cut-off sentence; if it is cut off, translate the part that was said and end with \"……\".";
+    }
 
     /// <summary>检查译文是否合格；合格返回 null，否则返回给模型看的问题说明。</summary>
     internal static string? Problem(string source, string translation, Direction d)
@@ -254,7 +267,10 @@ public sealed class QwenTranslator : ITranslator
               .AppendLine("- Do not turn ordinary words into game jargon: only say 撤离 when the speaker clearly says exfil / extract.")
               .AppendLine("- Translate idioms, slang and exclamations by meaning, not word by word (an exclamation like \"Jesus\" or \"oh my god\" is 天哪 / 我的天).");
         }
-        sb.AppendLine("- If the message is an incomplete fragment, translate only the words that are there. Never invent the missing part or add a subject, place or action that was not said; a fragment that means nothing on its own is garbled.");
+        sb.AppendLine("- If the message is an incomplete fragment, translate only the words that are there. Never invent the missing part or add a subject, place or action that was not said; a fragment that means nothing on its own is garbled.")
+          .AppendLine(toEn
+              ? "  Example: 他们正要去 → They're heading to… (not 'heading to exfil')."
+              : "  Example: \"They're headed to get.\" → 他们正要去拿…… (not 去撤离点). A cut-off sentence ends with ……");
     sb.AppendLine("- Misheard words: fix a word only when the intended word is obvious from the sentence and the game context; otherwise translate what is there literally and lower the confidence.")
           .AppendLine("- Do not add profanity or slurs that are not in the original; tone down extreme insults.");
         if (relevant.Count > 0)

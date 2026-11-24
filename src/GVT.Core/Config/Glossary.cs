@@ -64,6 +64,37 @@ public sealed class Glossary
     }
 
     /// <summary>
+    /// 英译中时译文里“凭空多出来”的游戏词：译文含某个术语的中文（如 撤离点），但原句里没有它的任何英文说法的关键词。
+    /// 只查三个字以上的专有词和“撤离”（两个字的常用词如 物资、背包 太容易误报）。返回第一个这样的中文词，没有返回 null。
+    /// 例：“I think Ryan and Talia are headed to get.” → “正往撤离点去”，原句没有 exfil / extraction。
+    /// </summary>
+    public string? InventedTerm(string source, string translation)
+    {
+        var srcWords = System.Text.RegularExpressions.Regex.Matches(source.ToLowerInvariant(), "[a-z]+").Select(m => m.Value).ToList();
+        string? invented = null;
+        foreach (var e in Entries)
+        {
+            var zhForms = new[] { e.Zh }.Concat(e.ZhAliases)
+                .Where(z => !string.IsNullOrWhiteSpace(z) && (z.Length >= 3 || z == "撤离") && !z.Any(c => c is >= 'A' and <= 'z'));
+            var hit = zhForms.Where(translation.Contains).OrderByDescending(z => z.Length).FirstOrDefault();
+            if (hit == null || (invented != null && invented.Length >= hit.Length)) continue;
+            // 原句里出现这个术语任何英文说法里的一个实词（4 个字母以上），就算有出处
+            var keys = new[] { e.En }.Concat(e.EnAliases)
+                .SelectMany(en => System.Text.RegularExpressions.Regex.Matches(en.ToLowerInvariant(), "[a-z]+").Select(m => m.Value))
+                .Where(w => w.Length >= 4);
+            if (!keys.Any(k => srcWords.Any(s => SameWord(s, k)))) invented = hit;
+        }
+        return invented;
+
+        // 词形变化（extract / extracting、plate / plates）：前 5 个字母相同（短词整词相同）就算同一个词
+        static bool SameWord(string a, string b)
+        {
+            int n = Math.Min(5, Math.Min(a.Length, b.Length));
+            return n >= 4 && (a.Length >= 5 && b.Length >= 5 ? a[..5] == b[..5] : a == b);
+        }
+    }
+
+    /// <summary>
     /// 给大模型识别（qwen3-asr / qwen-audio）的场景说明：一句话交代场景，再列出常用词。
     /// 写成自然语言而不是干巴巴的词表，降低听不清时把词表原样吐出来的风险。最多约 380 字。
     /// </summary>
