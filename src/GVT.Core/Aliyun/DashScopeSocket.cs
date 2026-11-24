@@ -17,10 +17,11 @@ public sealed class DashScopeSocket : IAsyncDisposable
     public event Action<byte[]>? BinaryMessage;
     public event Action<Exception?>? Closed;
 
-    public static async Task<DashScopeSocket> ConnectAsync(string url, string apiKey, CancellationToken ct)
+    public static async Task<DashScopeSocket> ConnectAsync(string url, string apiKey, CancellationToken ct, IEnumerable<(string Name, string Value)>? headers = null)
     {
         var s = new DashScopeSocket();
         s._ws.Options.SetRequestHeader("Authorization", $"bearer {apiKey}");
+        foreach (var (n, v) in headers ?? []) s._ws.Options.SetRequestHeader(n, v);
         s._ws.Options.SetRequestHeader("user-agent", "GameVoiceTranslator/0.1");
         s._ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
         await s._ws.ConnectAsync(new Uri(url), ct).ConfigureAwait(false);

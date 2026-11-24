@@ -84,6 +84,8 @@ public partial class MainWindow : Window
         ShowGuide("MW4");
         (_cfg.Send.Gate == GateMode.PushToTalk ? GatePtt : GateVad).IsChecked = true;
         (_cfg.DashScope.Translator == TranslatorKind.Mt ? TrMt : _cfg.DashScope.LlmModel == "qwen3.8-flash" ? TrLlmPlus : TrLlm).IsChecked = true;
+        (IsQwen3Asr(_cfg.Receive.AsrModel) ? RecvAsrQwen3 : RecvAsrFun).IsChecked = true;
+        (IsQwen3Asr(_cfg.Send.AsrModel) ? SendAsrQwen3 : SendAsrFun).IsChecked = true;
         SaveAudioCheck.IsChecked = _cfg.Debug.SaveUtteranceAudio;
         (_cfg.Receive.ListenMode == ReceiveListenMode.Both ? ListenBoth : ListenFirst).IsChecked = true;
         LoadVoices();
@@ -307,6 +309,8 @@ public partial class MainWindow : Window
 
     private void ShowGuide(string key) => GuideList.ItemsSource = Guides[key].Select(t => Tuple.Create(t.Item1, t.Item2)).ToList();
 
+    private static bool IsQwen3Asr(string? model) => model?.StartsWith("qwen3-asr", StringComparison.OrdinalIgnoreCase) == true;
+
     private void ApplyFormToConfig()
     {
         _cfg.Send.MicDevice = Picked(MicCombo);
@@ -316,6 +320,8 @@ public partial class MainWindow : Window
         _cfg.Send.Gate = GateVad.IsChecked == true ? GateMode.VoiceActivity : GateMode.PushToTalk;
         _cfg.DashScope.Translator = TrMt.IsChecked == true ? TranslatorKind.Mt : TranslatorKind.Llm;
         _cfg.DashScope.LlmModel = TrLlmPlus.IsChecked == true ? "qwen3.8-flash" : "qwen-flash";
+        _cfg.Receive.AsrModel = RecvAsrFun.IsChecked == true ? "fun-asr-realtime" : "qwen3-asr-flash-realtime";
+        _cfg.Send.AsrModel = SendAsrQwen3.IsChecked == true ? "qwen3-asr-flash-realtime" : "fun-asr-realtime";
         _cfg.Save();
     }
 

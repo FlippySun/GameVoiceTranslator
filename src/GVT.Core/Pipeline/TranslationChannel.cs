@@ -10,6 +10,8 @@ public sealed class ChannelOptions
 {
     public string Name { get; init; } = "";
     public Direction Direction { get; init; }
+    /// <summary>识别模型，空 = 用 DashScope.AsrModel。</summary>
+    public string? AsrModel { get; init; }
     public string? AsrLanguageHint { get; init; }
     public string? AsrContext { get; init; }
     /// <summary>识别热词（词 → 权重）。</summary>
@@ -182,8 +184,13 @@ public sealed class TranslationChannel
         SetStage(_enabled ? ChannelStage.Idle : ChannelStage.Off);
     }
 
+    /// <summary>识别模型判断出的语种既不是英文也不是中文（多半是噪声被认成了别的语言）。</summary>
+    internal static bool IsOtherLanguage(string? language)
+        => !string.IsNullOrWhiteSpace(language) && language is not ("en" or "zh" or "yue");
+
     private AsrRequest AsrRequestFor() => new(_opt.AsrLanguageHint, _opt.AsrContext)
     {
+        Model = string.IsNullOrWhiteSpace(_opt.AsrModel) ? null : _opt.AsrModel,
         Hotwords = _opt.AsrHotwords,
         VocabularyId = _opt.AsrVocabularyId,
         DisfluencyRemoval = _opt.AsrDisfluencyRemoval,
@@ -242,6 +249,7 @@ public sealed class TranslationChannel
             tts = _services.PrepareTts(_opt.Tts);
 
             var asr = u.Asr ?? throw new InvalidOperationException("没有识别会话");
+            string? language = null;
             string source;
             try { source = (await asr.FinishAsync(u.Token).ConfigureAwait(false)).Trim(); }
             catch (Exception ex) when (ex is TimeoutException or DashScopeException && !IsStale(u))
@@ -253,6 +261,7 @@ public sealed class TranslationChannel
             finally
             {
                 rec.AudioSeconds = asr.AudioSeconds;
+                language = asr.Language;
                 ChargeAsr(asr);
                 _ = asr.DisposeAsync().AsTask();
             }
@@ -274,6 +283,12 @@ public sealed class TranslationChannel
             {
                 Emit(u.Id, SubtitleKind.Info, _opt.Direction == Direction.EnToZh ? "对方说的是中文，不播报" : "已是英文，不翻译");
                 Drop(slot, rec, "already-target");
+                return;
+            }
+            if (_opt.Direction == Direction.EnToZh && IsOtherLanguage(language))
+            {
+                Emit(u.Id, SubtitleKind.Info, $"对方说的不是英文（{language}），不播报");
+                Drop(slot, rec, "other-language");
                 return;
             }
             if (_opt.FilterBackchannel && IsBackchannel(source))

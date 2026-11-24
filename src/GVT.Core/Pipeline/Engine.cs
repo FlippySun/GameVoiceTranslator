@@ -111,6 +111,7 @@ public sealed class Engine : IDisposable
         {
             Name = "发送",
             Direction = Direction.ZhToEn,
+            AsrModel = c.AsrModel,
             AsrLanguageHint = c.AsrLanguageHint,
             AsrContext = _cfg.DashScope.UseGlossaryAsAsrContext ? _glossary.AsrContextFor(Direction.ZhToEn) : null,
             Tts = c.ToTts(_cfg.DashScope.TtsModel),
@@ -119,7 +120,7 @@ public sealed class Engine : IDisposable
             SaveAudioDir = _cfg.Debug.SaveUtteranceAudio ? Path.Combine(Log.LogDirectory, "utterances") : null,
         }, _services, player, _usage) { Enabled = c.Enabled };
         Wire(Send);
-        AttachVocabulary(Send, Direction.ZhToEn, "zh");
+        AttachVocabulary(Send, Direction.ZhToEn, "zh", c.AsrModel);
         Send.Translated += _echo.AddOutgoing;
 
         _mic = Track(new CaptureSource(micDev));
@@ -167,7 +168,9 @@ public sealed class Engine : IDisposable
         {
             Name = "接收",
             Direction = Direction.EnToZh,
-            AsrLanguageHint = c.AsrLanguageHint,
+            AsrModel = c.AsrModel,
+            // qwen3-asr 不指定语种：让它自己判断，队友说中文时原样识别成中文
+            AsrLanguageHint = Qwen3AsrRealtimeSession.Handles(c.AsrModel) || Qwen3AsrFlashSession.Handles(c.AsrModel) ? null : c.AsrLanguageHint,
             AsrContext = _cfg.DashScope.UseGlossaryAsAsrContext ? _glossary.AsrContextFor(Direction.EnToZh) : null,
             Tts = c.ToTts(_cfg.DashScope.TtsModel),
             FollowPan = c.FollowSourcePan,
@@ -177,7 +180,7 @@ public sealed class Engine : IDisposable
             LowConfidencePrefix = c.LowConfidencePrefix,
         }, _services, player, _usage) { Enabled = c.Enabled };
         Wire(Receive);
-        AttachVocabulary(Receive, Direction.EnToZh, "en");
+        AttachVocabulary(Receive, Direction.EnToZh, "en", c.AsrModel);
         Receive.ShouldDropSource = _echo.IsEcho;
 
         var vad = Track(VoiceDetectorFactory.Create(_cfg.Vad, _baseDir, Log.Warn));
@@ -198,9 +201,11 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>后台准备识别热词表，建好后从下一句开始生效；失败就不用热词。</summary>
-    private void AttachVocabulary(TranslationChannel ch, Direction dir, string lang)
+    /// <summary>预编译热词表只给 fun-asr 用（qwen3-asr 不支持热词表）。</summary>
+    private void AttachVocabulary(TranslationChannel ch, Direction dir, string lang, string? model)
     {
         if (!_cfg.DashScope.UseAsrHotwords) return;
+        if (!string.IsNullOrWhiteSpace(model) && !model.StartsWith("fun-asr", StringComparison.OrdinalIgnoreCase)) return;
         var words = _glossary.HotwordsFor(dir);
         _ = Task.Run(async () =>
         {

@@ -111,10 +111,28 @@ try
             }
             return 0;
         }
+        case "asr-probe" when args.Length > 1:
+        {
+            // 按真实语速推一段录音，打印中间结果到达的时间（看识别模型是否边说边出字）
+            var model = Opt("--model", "qwen3-asr-flash-realtime");
+            var wav = args[1];
+            using var r = new NAudio.Wave.WaveFileReader(wav);
+            var bytes = new byte[r.Length]; int n = r.Read(bytes, 0, bytes.Length);
+            var samples = new float[n / 2];
+            for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(bytes, i * 2) / 32768f;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await using var s = DashScopeServices.StartAsr(cfg.DashScope, SecretStore.GetApiKey()!, new AsrRequest(Opt("--lang", "") is { Length: > 0 } l ? l : null) { Model = model });
+            s.Partial += t => Console.WriteLine($"  {sw.ElapsedMilliseconds,5} ms  中间结果：{t}");
+            for (int off = 0; off < samples.Length; off += 1600) { s.Push(samples.AsSpan(off, Math.Min(1600, samples.Length - off))); await Task.Delay(100); }
+            Console.WriteLine($"  {sw.ElapsedMilliseconds,5} ms  音频推完（{samples.Length / 16000.0:F2} 秒）");
+            var text = await s.FinishAsync(CancellationToken.None);
+            Console.WriteLine($"  {sw.ElapsedMilliseconds,5} ms  最终：{text}");
+            return 0;
+        }
         case "asr-ab" when args.Length > 1:
             return await AsrAb.RunAsync(cfg, Glossary.Load(cfg.ResolveGlossaryPath()), SecretStore.GetApiKey()!, args[1],
                 Opt("--variants", "").Split(',', StringSplitOptions.RemoveEmptyEntries), int.Parse(Opt("--limit", "100000")),
-                int.Parse(Opt("--realtime", "0")), Opt("--out", "asr-ab.tsv"));
+                int.Parse(Opt("--realtime", "0")), Opt("--out", "asr-ab.tsv"), int.Parse(Opt("--par", "8")));
         case "env-check":
         {
             var issues = GVT.Core.Setup.EnvironmentCheck.Run(cfg, SecretStore.HasApiKey);
@@ -295,14 +313,16 @@ async Task<int> RunPipeline(string wavDir, bool fast)
     {
         Name = isSend ? "发送" : "接收",
         Direction = direction,
-        AsrLanguageHint = isSend ? cfg.Send.AsrLanguageHint : cfg.Receive.AsrLanguageHint,
+        AsrModel = isSend ? cfg.Send.AsrModel : cfg.Receive.AsrModel,
+        AsrLanguageHint = isSend ? cfg.Send.AsrLanguageHint
+            : Qwen3AsrRealtimeSession.Handles(cfg.Receive.AsrModel) || Qwen3AsrFlashSession.Handles(cfg.Receive.AsrModel) ? null : cfg.Receive.AsrLanguageHint,
         AsrContext = cfg.DashScope.UseGlossaryAsAsrContext ? glossary.AsrContextFor(direction) : null,
         FilterBackchannel = !isSend && cfg.Receive.SkipBackchannel,
         LowConfidencePrefix = isSend ? "" : cfg.Receive.LowConfidencePrefix,
         Tts = isSend ? cfg.Send.ToTts(cfg.DashScope.TtsModel) : cfg.Receive.ToTts(cfg.DashScope.TtsModel),
         SkipIfAlreadyTarget = !isSend,
     }, svc, player, usage);
-    if (cfg.DashScope.UseAsrHotwords)
+    if (cfg.DashScope.UseAsrHotwords && (isSend ? cfg.Send.AsrModel : cfg.Receive.AsrModel).StartsWith("fun-asr"))
         ch.Options.AsrVocabularyId = await svc.EnsureVocabularyAsync(glossary.HotwordsFor(direction), isSend ? "zh" : "en");
 
     var outDir = Path.Combine(wavDir, "out");

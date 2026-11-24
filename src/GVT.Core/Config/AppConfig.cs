@@ -78,6 +78,7 @@ public sealed class DashScopeConfig
     public string WorkspaceId { get; set; } = "";
     public string Region { get; set; } = "cn-beijing";
 
+    /// <summary>两个方向没有单独指定时用的识别模型（各方向见 Send.AsrModel / Receive.AsrModel）。</summary>
     public string AsrModel { get; set; } = "fun-asr-realtime";
     /// <summary>音色不在内置列表时使用的合成模型。</summary>
     public string TtsModel { get; set; } = "qwen-audio-3.1-tts-flash";
@@ -150,6 +151,8 @@ public sealed class SendConfig
     public string OutputDevice { get; set; } = "CABLE Input (VB-Audio Virtual Cable)";
     public GateMode Gate { get; set; } = GateMode.PushToTalk;
     public string AsrLanguageHint { get; set; } = "zh";
+    /// <summary>识别我说的中文的模型。实测 fun-asr-realtime（配游戏热词）在中文上最稳。</summary>
+    public string AsrModel { get; set; } = "fun-asr-realtime";
     public string Voice { get; set; } = "Andy_v3.1";
     public VoiceStyle Style { get; set; } = VoiceStyle.Casual;
     /// <summary>自定义说话风格（自然语言），填写后覆盖 Style。</summary>
@@ -170,6 +173,11 @@ public sealed class ReceiveConfig
     public string SourceDevice { get; set; } = "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)";
     public string HeadphoneDevice { get; set; } = "";
     public string AsrLanguageHint { get; set; } = "en";
+    /// <summary>
+    /// 识别队友说话的模型。qwen3-asr-flash-realtime 对口音、压缩过的游戏语音明显更准（2026-11-23 录音对比）；
+    /// 用它时不指定语种、由模型自动判断，队友里有人说中文时会原样识别成中文（只显示不播报），不会被硬转成英文乱码。
+    /// </summary>
+    public string AsrModel { get; set; } = "qwen3-asr-flash-realtime";
     public string Voice { get; set; } = "longanyang_v3.1";
     public VoiceStyle Style { get; set; } = VoiceStyle.Casual;
     public string CustomInstruction { get; set; } = "";

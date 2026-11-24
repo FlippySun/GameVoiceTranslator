@@ -12,7 +12,7 @@ using NAudio.Wave;
 /// </summary>
 static class AsrAb
 {
-    public sealed record Variant(string Name, string Model, bool Hotwords, bool FunVocabulary, bool Disfluency);
+    public sealed record Variant(string Name, string Model, bool Hotwords, bool FunVocabulary, bool Disfluency, bool Scene = false, int HotWeight = 4, bool AutoLang = false);
 
     public static readonly Variant[] All =
     {
@@ -22,11 +22,19 @@ static class AsrAb
         new("msgh", "qwen-audio-3.1-asr-flash-message", true, false, false),
         new("msghd", "qwen-audio-3.1-asr-flash-message", true, false, true),
         new("strh", "qwen-audio-3.1-asr-flash-streaming", true, false, false),
+        new("q30", "qwen-audio-3.0-asr-flash-streaming", true, false, false),
+        new("q30c", "qwen-audio-3.0-asr-flash-streaming", true, false, false, Scene: true),
+        new("q30s", "qwen-audio-3.0-asr-flash-streaming", true, false, false, Scene: true, HotWeight: 50),
+        new("q3rt", "qwen3-asr-flash-realtime", false, false, false),
+        new("q3rta", "qwen3-asr-flash-realtime", false, false, false, AutoLang: true),
+        new("q3rtc", "qwen3-asr-flash-realtime", false, false, false, Scene: true),
+        new("q3", "qwen3-asr-flash", false, false, false),
+        new("q3c", "qwen3-asr-flash", false, false, false, Scene: true),
     };
 
     private sealed record Clip(string Name, string Wav, bool Send, string Original, float[] Samples);
 
-    public static async Task<int> RunAsync(AppConfig cfg, Glossary glossary, string key, string dir, string[] variantNames, int limit, int realtime, string outPath)
+    public static async Task<int> RunAsync(AppConfig cfg, Glossary glossary, string key, string dir, string[] variantNames, int limit, int realtime, string outPath, int parallel = 8)
     {
         var variants = All.Where(v => variantNames.Length == 0 || variantNames.Contains(v.Name)).ToArray();
         var clips = Directory.GetFiles(dir, "*.wav").OrderBy(f => f).Take(limit).Select(Load).Where(c => c.Samples.Length > 1600).ToList();
@@ -38,6 +46,9 @@ static class AsrAb
             [false] = glossary.HotwordsFor(Direction.EnToZh),
         };
         Console.WriteLine($"热词 中文 {hot[true].Count} 个：{string.Join("、", hot[true].Keys)}");
+        var scene = new Dictionary<bool, string> { [true] = glossary.AsrScenePromptFor(Direction.ZhToEn), [false] = glossary.AsrScenePromptFor(Direction.EnToZh) };
+        Console.WriteLine("场景提示 中文：" + scene[true]);
+        Console.WriteLine("场景提示 英文：" + scene[false]);
         Console.WriteLine($"热词 英文 {hot[false].Count} 个：{string.Join(", ", hot[false].Keys)}");
 
         var vocabIds = new Dictionary<bool, string>();
@@ -50,7 +61,7 @@ static class AsrAb
 
         // 准确性：整段一次推完，结果并排
         var results = new Dictionary<(string Clip, string Variant), (string Text, int InTok, int OutTok, double Ms)>();
-        var sem = new SemaphoreSlim(8);
+        var sem = new SemaphoreSlim(parallel);
         var jobs = new List<Task>();
         foreach (var c in clips)
             foreach (var v in variants)
@@ -59,7 +70,7 @@ static class AsrAb
                     await sem.WaitAsync();
                     try
                     {
-                        var r = await RecognizeAsync(cfg.DashScope, key, c, v, hot[c.Send], vocabIds.GetValueOrDefault(c.Send), paced: false);
+                        var r = await RecognizeAsync(cfg.DashScope, key, c, v, hot[c.Send], vocabIds.GetValueOrDefault(c.Send), paced: false, scene[c.Send]);
                         lock (results) results[(c.Name, v.Name)] = r;
                     }
                     catch (Exception ex)
@@ -117,7 +128,7 @@ static class AsrAb
                 {
                     var rs = await Task.WhenAll(batch.Select(async c =>
                     {
-                        try { return (await RecognizeAsync(cfg.DashScope, key, c, v, hot[c.Send], vocabIds.GetValueOrDefault(c.Send), paced: true)).Ms; }
+                        try { return (await RecognizeAsync(cfg.DashScope, key, c, v, hot[c.Send], vocabIds.GetValueOrDefault(c.Send), paced: true, scene[c.Send])).Ms; }
                         catch { return -1; }
                     }));
                     ms.AddRange(rs.Where(x => x >= 0));
@@ -134,16 +145,16 @@ static class AsrAb
     private static double Pct(List<double> s, double p) => s.Count == 0 ? double.NaN : s[Math.Min(s.Count - 1, (int)(s.Count * p))];
 
     private static async Task<(string Text, int InTok, int OutTok, double Ms)> RecognizeAsync(
-        DashScopeConfig dc, string key, Clip c, Variant v, Dictionary<string, int> hot, string? vocabId, bool paced)
+        DashScopeConfig dc, string key, Clip c, Variant v, Dictionary<string, int> hot, string? vocabId, bool paced, string scene)
     {
-        var req = new AsrRequest(c.Send ? "zh" : "en")
+        var req = new AsrRequest(v.AutoLang ? null : c.Send ? "zh" : "en", v.Scene ? scene : null)
         {
             Model = v.Model,
-            Hotwords = v.Hotwords ? hot : null,
+            Hotwords = v.Hotwords ? (v.HotWeight == 4 ? hot : hot.ToDictionary(k => k.Key, k => v.HotWeight)) : null,
             VocabularyId = v.FunVocabulary ? vocabId : null,
             DisfluencyRemoval = v.Disfluency,
         };
-        await using var s = FunAsrSession.Start(dc, key, req);
+        await using var s = DashScopeServices.StartAsr(dc, key, req);
         const int chunk = 1600;
         for (int off = 0; off < c.Samples.Length; off += chunk)
         {

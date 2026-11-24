@@ -26,6 +26,8 @@ public interface IAsrSession : IAsyncDisposable
     double AudioSeconds { get; }
     /// <summary>本句已推入的全部音频（识别超时后用它重试）。</summary>
     float[] CapturedAudio => [];
+    /// <summary>识别模型判断出的语种（zh / en / ja …）；不提供语种的模型为 null。</summary>
+    string? Language => null;
     /// <summary>按 token 计费的识别模型返回的用量（输入, 输出）；按秒计费的为 (0, 0)。</summary>
     (int Input, int Output) Tokens => (0, 0);
 }
@@ -76,7 +78,17 @@ public sealed class DashScopeServices : ISpeechServices
         Translator = new QwenTranslator(cfg, apiKey, glossary);
     }
 
-    public IAsrSession StartAsr(AsrRequest request) => FunAsrSession.Start(_cfg, _apiKey, request);
+    public IAsrSession StartAsr(AsrRequest request) => StartAsr(_cfg, _apiKey, request);
+
+    /// <summary>按模型名选识别协议：qwen3-asr-flash-realtime / qwen3-asr-flash 各有自己的接口，其余（fun-asr、qwen-audio）走 inference WebSocket。</summary>
+    public static IAsrSession StartAsr(DashScopeConfig cfg, string apiKey, AsrRequest request)
+    {
+        var model = string.IsNullOrWhiteSpace(request.Model) ? cfg.AsrModel : request.Model!;
+        var req = request with { Model = model };
+        if (Qwen3AsrRealtimeSession.Handles(model)) return Qwen3AsrRealtimeSession.Start(cfg, apiKey, req);
+        if (Qwen3AsrFlashSession.Handles(model)) return new Qwen3AsrFlashSession(cfg, apiKey, req);
+        return FunAsrSession.Start(cfg, apiKey, req);
+    }
 
     public ITtsSession PrepareTts(TtsVoice voice) => Qwen3TtsSession.Handles(voice.Model)
         ? new Qwen3TtsSession(_cfg, _apiKey, voice)

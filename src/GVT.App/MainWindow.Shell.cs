@@ -461,6 +461,7 @@ public partial class MainWindow
         UpdateEnvStatus(new EnvironmentCheck.DriverState(false, true));
         await Task.Delay(600);
         SavePng(this, P("setup-missing"));
+        SaveElementPng(TransCard, P("trans"));
         UpdateKeyStatus();
         LoadDevices();
 

@@ -578,7 +578,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Card}">
+                        <Border x:Name="TransCard" Style="{StaticResource Card}">
                             <StackPanel>
                                 <TextBlock Text="翻译方式" Style="{StaticResource T.H2}"/>
                                 <TextBlock Text="说话方式" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
@@ -599,6 +599,37 @@
                                         <RadioButton x:Name="TrMt" Style="{StaticResource Segment}" GroupName="Tr" Content="机器翻译"/>
                                     </StackPanel>
                                 </Border>
+                                <Grid Margin="0,14,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="28"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="识别队友的话" Style="{StaticResource T.Label}" Foreground="{StaticResource B.Mate}" VerticalAlignment="Center"/>
+                                            <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="Qwen3-ASR：对口音和游戏语音压缩更准，队友里有人说中文时会自动认出来（只显示不播报）。&#x0a;Fun-ASR：之前一直用的识别。&#x0a;在下次点“开始”时生效。"/>
+                                        </StackPanel>
+                                        <Border Style="{StaticResource SegmentHost}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="RecvAsrQwen3" Style="{StaticResource Segment}" GroupName="RecvAsr" Content="Qwen3-ASR（推荐）"/>
+                                                <RadioButton x:Name="RecvAsrFun" Style="{StaticResource Segment}" GroupName="RecvAsr" Content="Fun-ASR"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="识别我的中文" Style="{StaticResource T.Label}" Foreground="{StaticResource B.Me}" VerticalAlignment="Center"/>
+                                            <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="Fun-ASR：配合游戏热词，中文最稳。&#x0a;Qwen3-ASR：更少口头停顿，但偶尔会把意思听反（例如“我不知道”听成“我知道”）。&#x0a;在下次点“开始”时生效。"/>
+                                        </StackPanel>
+                                        <Border Style="{StaticResource SegmentHost}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="SendAsrFun" Style="{StaticResource Segment}" GroupName="SendAsr" Content="Fun-ASR（推荐）"/>
+                                                <RadioButton x:Name="SendAsrQwen3" Style="{StaticResource Segment}" GroupName="SendAsr" Content="Qwen3-ASR"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>

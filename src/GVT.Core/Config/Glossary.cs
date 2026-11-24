@@ -63,6 +63,31 @@ public sealed class Glossary
         return d;
     }
 
+    /// <summary>
+    /// 给大模型识别（qwen3-asr / qwen-audio）的场景说明：一句话交代场景，再列出常用词。
+    /// 写成自然语言而不是干巴巴的词表，降低听不清时把词表原样吐出来的风险。最多约 380 字。
+    /// </summary>
+    public string AsrScenePromptFor(Direction direction, int maxChars = 380)
+    {
+        var head = direction == Direction.ZhToEn
+            ? "这是《使命召唤》DMZ 模式的组队语音，玩家用中文口语交流战术、报点和物资，句子通常很短。常用词有："
+            : "Team voice chat in Call of Duty DMZ. Teammates (often Australian) speak casual, short English about tactics, callouts and loot. Common words: ";
+        var words = direction == Direction.ZhToEn
+            ? Entries.Where(e => e.Hotword).Select(e => e.Zh).Concat(Entries.Select(e => e.Zh))
+            : Entries.Where(e => e.Hotword).Select(e => e.En).Concat(Entries.Select(e => e.En));
+        var sep = direction == Direction.ZhToEn ? "、" : ", ";
+        var sb = new StringBuilder(head);
+        int n = 0;
+        foreach (var w in words.Where(w => !string.IsNullOrWhiteSpace(w)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (sb.Length + w.Length + 2 > maxChars) break;
+            if (n++ > 0) sb.Append(sep);
+            sb.Append(w);
+        }
+        sb.Append(direction == Direction.ZhToEn ? "。" : ".");
+        return sb.ToString();
+    }
+
     /// <summary>识别上下文词表（fun-asr-realtime 的 input.context，每轮最多 400 字）。</summary>
     public string AsrContextFor(Direction direction, int maxChars = 380)
     {
