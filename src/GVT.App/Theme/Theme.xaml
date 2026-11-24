@@ -528,10 +528,63 @@
     </Style>
 
     <Style TargetType="ToolTip">
-        <Setter Property="Background" Value="{StaticResource B.Surface3}"/>
         <Setter Property="Foreground" Value="{StaticResource B.Text}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource B.BorderStrong}"/>
-        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{StaticResource B.Surface3}" BorderBrush="{StaticResource B.BorderStrong}" BorderThickness="1"
+                            CornerRadius="8" Padding="11,8">
+                        <ContentPresenter>
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap"/>
+                                    <Setter Property="MaxWidth" Value="340"/>
+                                    <Setter Property="LineHeight" Value="19"/>
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 说明问号：鼠标悬停时用气泡显示说明。用法：<ContentControl Style="{StaticResource HelpTip}" ToolTip="说明"/> -->
+    <Style x:Key="HelpTip" TargetType="ContentControl">
+        <Setter Property="Width" Value="15"/>
+        <Setter Property="Height" Value="15"/>
+        <Setter Property="Margin" Value="7,0,0,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Cursor" Value="Help"/>
+        <Setter Property="ToolTipService.InitialShowDelay" Value="80"/>
+        <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Grid Background="Transparent">
+                        <Ellipse x:Name="Ring" Stroke="{StaticResource B.Text3}" StrokeThickness="1.2"/>
+                        <TextBlock x:Name="Q" Text="?" FontSize="10" FontWeight="Bold" Foreground="{StaticResource B.Text3}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource B.Text}"/>
+                            <Setter TargetName="Q" Property="Foreground" Value="{StaticResource B.Text}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 小号说明问号：放在小标签旁 -->
+    <Style x:Key="HelpTipSmall" TargetType="ContentControl" BasedOn="{StaticResource HelpTip}">
+        <Setter Property="Width" Value="13"/>
+        <Setter Property="Height" Value="13"/>
+        <Setter Property="Margin" Value="6,0,0,0"/>
     </Style>
     <!-- ============ 浮层卡片（提示卡、对话框、弹出面板） ============ -->
     <DropShadowEffect x:Key="FloatShadow" BlurRadius="36" ShadowDepth="10" Direction="270" Opacity="0.55" Color="#000000"/>

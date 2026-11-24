@@ -237,10 +237,7 @@
             <DockPanel Margin="14,14,14,16">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,4,0,26">
                     <Image Source="pack://application:,,,/Assets/app.png" Width="38" Height="38" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="游戏双译" FontSize="15" FontWeight="SemiBold" FontFamily="{StaticResource F.Display}"/>
-                        <TextBlock Text="MW4 · DMZ 语音翻译" Style="{StaticResource T.Caption}"/>
-                    </StackPanel>
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="游戏双译" FontSize="15" FontWeight="SemiBold" FontFamily="{StaticResource F.Display}"/>
                 </StackPanel>
 
                 <!-- 底部运行状态：点击可修改单次花费上限 -->
@@ -273,9 +270,10 @@
                            StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
                         <Border Style="{StaticResource FloatCard}" Margin="16,16,16,24" Width="330">
                             <StackPanel>
-                                <TextBlock Text="单次花费上限" Style="{StaticResource T.H2}"/>
-                                <TextBlock Text="每次点“开始”后单独计算。到了上限会自动暂停翻译，队友原声照常能听到。" Style="{StaticResource T.Caption}"
-                                           TextWrapping="Wrap" Margin="0,4,0,14"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock Text="单次花费上限" Style="{StaticResource T.H2}"/>
+                                    <ContentControl Style="{StaticResource HelpTip}" ToolTip="每次点“开始”后重新计算。到了上限会自动暂停翻译，队友原声照常能听到。"/>
+                                </StackPanel>
                                 <c:BudgetPicker x:Name="PopupBudget"/>
                                 <TextBlock x:Name="PopupCost" Style="{StaticResource T.Caption}" Margin="2,12,0,0"/>
                             </StackPanel>
@@ -309,7 +307,7 @@
                     <Button x:Name="MaxBtn" Style="{StaticResource BtnCaption}" Content="&#xE922;" Click="Max_Click"/>
                     <Button Style="{StaticResource BtnCaption}" Content="&#xE8BB;" Click="Close_Click"/>
                 </StackPanel>
-                <TextBlock x:Name="PageTitle" Text="控制台" Style="{StaticResource T.Caption}" VerticalAlignment="Center" Margin="28,0,0,0"/>
+                <TextBlock x:Name="PageTitle" Visibility="Collapsed"/>
             </DockPanel>
 
             <Grid Grid.Row="1" x:Name="PageHost" Margin="28,4,28,24">
@@ -333,8 +331,6 @@
                             <Button x:Name="PowerBtn" Style="{StaticResource PowerButton}" Tag="False" Click="Power_Click" ToolTip="开始 / 停止翻译"/>
                             <StackPanel Grid.Column="1" Margin="22,0,16,0" VerticalAlignment="Center">
                                 <TextBlock x:Name="HeroTitle" Text="准备就绪" Style="{StaticResource T.H1}"/>
-                                <TextBlock x:Name="HeroSub" Style="{StaticResource T.Body}" Margin="0,6,0,0"
-                                           Text="点击左侧按钮开始翻译。"/>
                                 <Border x:Name="WarnBox" Style="{StaticResource Chip}" Background="{StaticResource B.DangerSoft}" HorizontalAlignment="Left"
                                         Margin="0,10,0,0" Padding="10,6" CornerRadius="8" Visibility="Collapsed">
                                     <StackPanel>
@@ -351,7 +347,10 @@
                                 <CheckBox x:Name="ReceiveToggle" Style="{StaticResource Toggle}" IsChecked="True" Margin="0,12,0,0" Click="ReceiveToggle_Click">
                                     <TextBlock><Run Text="中文播报" Foreground="{StaticResource B.Text}"/><Run Text="  F11" Foreground="{StaticResource B.Text3}" FontSize="11"/></TextBlock>
                                 </CheckBox>
-                                <TextBlock Text="队友原声" Style="{StaticResource T.Label}" Margin="0,16,0,6"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,16,0,6">
+                                    <TextBlock Text="队友原声" Style="{StaticResource T.Label}" VerticalAlignment="Center"/>
+                                    <ContentControl x:Name="ListenTip" Style="{StaticResource HelpTip}" Width="13" Height="13"/>
+                                </StackPanel>
                                 <Border Style="{StaticResource SegmentHost}">
                                     <StackPanel Orientation="Horizontal">
                                         <RadioButton x:Name="ListenFirst" Style="{StaticResource Segment}" GroupName="Listen" Content="压低，听译音" Checked="Listen_Checked"/>
@@ -433,9 +432,9 @@
                                 </Button>
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                                     <Ellipse Width="8" Height="8" Fill="{StaticResource B.Me}"/>
-                                    <TextBlock Text="我说的（队友听到英文）" Style="{StaticResource T.Caption}" Margin="6,0,14,0"/>
+                                    <TextBlock Text="我" Style="{StaticResource T.Caption}" Margin="6,0,14,0"/>
                                     <Ellipse Width="8" Height="8" Fill="{StaticResource B.Mate}"/>
-                                    <TextBlock Text="队友说的（我听到中文）" Style="{StaticResource T.Caption}" Margin="6,0,0,0"/>
+                                    <TextBlock Text="队友" Style="{StaticResource T.Caption}" Margin="6,0,0,0"/>
                                 </StackPanel>
                                 <TextBlock Text="对话" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
                             </DockPanel>
@@ -446,7 +445,6 @@
                                 <StackPanel x:Name="TimelineEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
                                     <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource F.Icon}" FontSize="30" Foreground="{StaticResource B.Text3}" HorizontalAlignment="Center"/>
                                     <TextBlock Text="还没有对话" Style="{StaticResource T.H2}" Foreground="{StaticResource B.Text2}" HorizontalAlignment="Center" Margin="0,10,0,4"/>
-                                    <TextBlock Text="开始翻译后，你说的话和队友说的话会按时间出现在这里" Style="{StaticResource T.Caption}" HorizontalAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
                         </DockPanel>
@@ -455,9 +453,8 @@
 
                 <!-- ========== 设备与接入 ========== -->
                 <ScrollViewer x:Name="PageSetup" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
-                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
-                        <TextBlock Text="设备与接入" Style="{StaticResource T.H1}"/>
-                        <TextBlock Text="一次设置好，之后只需要在控制台点开始。" Style="{StaticResource T.Body}" Margin="0,6,0,18"/>
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                        <TextBlock Text="设备与接入" Style="{StaticResource T.H1}" Margin="0,0,0,18"/>
 
                         <Border Style="{StaticResource Card}" Margin="0,0,0,14">
                             <StackPanel>
@@ -474,10 +471,12 @@
                                             </StackPanel>
                                         </Button>
                                     </Grid>
-                                    <TextBlock Text="阿里云百炼 API Key" Style="{StaticResource T.H2}"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="阿里云百炼 API Key" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
+                                        <ContentControl Style="{StaticResource HelpTip}" ToolTip="请使用“按量付费”的 Key（sk-ws- 开头）。Token Plan / Coding Plan 的 sk-sp- Key 不能用。&#x0a;Key 用 Windows 当前用户加密保存在本机，不会明文写入磁盘。"/>
+                                    </StackPanel>
                                 </DockPanel>
-                                <TextBlock x:Name="KeyHint" Text="使用“按量付费”的 Key（sk-ws- 开头）。用 Windows 当前用户加密保存在本机，不会以明文写入磁盘。" Style="{StaticResource T.Caption}" Margin="0,4,0,14" TextWrapping="Wrap"/>
-                                <DockPanel>
+                                <DockPanel Margin="0,14,0,0">
                                     <Button DockPanel.Dock="Right" Style="{StaticResource BtnPrimary}" Content="保存" Margin="10,0,0,0" Click="SaveKey_Click"/>
                                     <PasswordBox x:Name="ApiKeyBox"/>
                                 </DockPanel>
@@ -527,22 +526,24 @@
                                     <StackPanel>
                                         <TextBlock Text="我的麦克风" Style="{StaticResource FieldLabel}" Foreground="{StaticResource B.Me}"/>
                                         <ComboBox x:Name="MicCombo"/>
-                                        <TextBlock Text="你真实说话用的麦克风" Style="{StaticResource T.Caption}" Margin="0,5,0,0"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Text="英文译音发送到" Style="{StaticResource FieldLabel}" Foreground="{StaticResource B.Me}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="英文译音发送到" Style="{StaticResource T.Label}" Foreground="{StaticResource B.Me}" VerticalAlignment="Center"/>
+                                            <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="选 CABLE Input。游戏 / 语音软件的麦克风要选它的另一端 CABLE Output。"/>
+                                        </StackPanel>
                                         <ComboBox x:Name="SendOutCombo"/>
-                                        <TextBlock Text="游戏 / 语音软件的麦克风选它的另一端 CABLE Output" Style="{StaticResource T.Caption}" Margin="0,5,0,0"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="2">
-                                        <TextBlock Text="队友声音来源" Style="{StaticResource FieldLabel}" Foreground="{StaticResource B.Mate}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="队友声音来源" Style="{StaticResource T.Label}" Foreground="{StaticResource B.Mate}" VerticalAlignment="Center"/>
+                                            <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="选 Hi-Fi Cable Output。游戏的“语音聊天输出设备”要选它的另一端 Hi-Fi Cable Input。"/>
+                                        </StackPanel>
                                         <ComboBox x:Name="SourceCombo"/>
-                                        <TextBlock Text="游戏的“语音聊天输出设备”选它的另一端 Hi-Fi Cable Input" Style="{StaticResource T.Caption}" Margin="0,5,0,0"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="2" Grid.Column="2">
                                         <TextBlock Text="我的耳机" Style="{StaticResource FieldLabel}" Foreground="{StaticResource B.Mate}"/>
                                         <ComboBox x:Name="HeadphoneCombo"/>
-                                        <TextBlock Text="中文译音和队友原声在这里播放" Style="{StaticResource T.Caption}" Margin="0,5,0,0"/>
                                     </StackPanel>
                                 </Grid>
                             </StackPanel>
@@ -587,15 +588,17 @@
                                         <RadioButton x:Name="GateVad" Style="{StaticResource Segment}" GroupName="Gate" Content="语音激活"/>
                                     </StackPanel>
                                 </Border>
-                                <TextBlock Text="翻译引擎" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                    <TextBlock Text="翻译引擎" Style="{StaticResource T.Label}" VerticalAlignment="Center"/>
+                                    <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="快：qwen-flash。&#x0a;更准：qwen3.8-flash，更善于察觉听错的句子（标成“可能是”或不播报），每句多等约 0.35 秒。&#x0a;机器翻译：qwen-mt-flash 专用翻译模型。&#x0a;说话方式和翻译引擎在下次点“开始”时生效。"/>
+                                </StackPanel>
                                 <Border Style="{StaticResource SegmentHost}">
                                     <StackPanel Orientation="Horizontal">
-                                        <RadioButton x:Name="TrLlm" Style="{StaticResource Segment}" GroupName="Tr" Content="快（qwen-flash，推荐）"/>
-                                        <RadioButton x:Name="TrLlmPlus" Style="{StaticResource Segment}" GroupName="Tr" Content="更准（qwen3.8-flash，慢约 0.35 秒）"/>
-                                        <RadioButton x:Name="TrMt" Style="{StaticResource Segment}" GroupName="Tr" Content="qwen-mt-flash"/>
+                                        <RadioButton x:Name="TrLlm" Style="{StaticResource Segment}" GroupName="Tr" Content="快（推荐）"/>
+                                        <RadioButton x:Name="TrLlmPlus" Style="{StaticResource Segment}" GroupName="Tr" Content="更准"/>
+                                        <RadioButton x:Name="TrMt" Style="{StaticResource Segment}" GroupName="Tr" Content="机器翻译"/>
                                     </StackPanel>
                                 </Border>
-                                <TextBlock Text="这两项在下次点“开始”时生效。“更准”更善于察觉听错的句子（标成“可能是”或不播报），但每句多等约 0.35 秒。" Style="{StaticResource T.Caption}" Margin="0,10,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -603,9 +606,11 @@
 
                 <!-- ========== 声音 ========== -->
                 <ScrollViewer x:Name="PageVoice" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
-                    <StackPanel MaxWidth="940" HorizontalAlignment="Left">
-                        <TextBlock Text="声音" Style="{StaticResource T.H1}"/>
-                        <TextBlock Text="点 ▶ 在自己耳机里试听。修改立即生效（下一句开始），不会打断正在播的内容。" Style="{StaticResource T.Body}" Margin="0,6,0,18"/>
+                    <StackPanel MaxWidth="940" HorizontalAlignment="Left" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                            <TextBlock Text="声音" Style="{StaticResource T.H1}" VerticalAlignment="Center"/>
+                            <ContentControl  Style="{StaticResource HelpTip}" Margin="10,3,0,0" ToolTip="点 ▶ 在自己耳机里试听。修改从下一句开始生效，不会打断正在播的内容。"/>
+                        </StackPanel>
 
                         <Border Style="{StaticResource Card}" Margin="0,0,0,14">
                             <StackPanel>
@@ -613,9 +618,9 @@
                                     <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource B.MeSoft}">
                                         <TextBlock Text="&#xE720;" FontFamily="{StaticResource F.Icon}" FontSize="13" Foreground="{StaticResource B.Me}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
-                                    <StackPanel Margin="12,0,0,0">
-                                        <TextBlock Text="队友听到的英文声音" Style="{StaticResource T.H2}"/>
-                                        <TextBlock Text="建议先试 Qwen3 的 Ryan / Aiden 和“设计”声音；Qwen3 音色不受下方风格和语速影响" Style="{StaticResource T.Caption}"/>
+                                    <StackPanel Margin="12,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="队友听到的英文声音" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
+                                        <ContentControl Style="{StaticResource HelpTip}" ToolTip="建议先试 Qwen3 的 Ryan、Aiden 和“设计”的声音。&#x0a;Qwen3 音色不受下面的说话风格和语速影响。"/>
                                     </StackPanel>
                                 </StackPanel>
                                 <ListBox x:Name="SendVoiceList" Style="{StaticResource VoiceList}" Tag="{StaticResource B.Me}" Margin="0,16,0,8" SelectionChanged="Voice_Changed"/>
@@ -643,12 +648,17 @@
                                         <Slider x:Name="SendRate" Minimum="0.8" Maximum="1.5" SmallChange="0.05" LargeChange="0.1" ValueChanged="Rate_Changed"/>
                                     </StackPanel>
                                 </Grid>
-                                <TextBlock Text="自定义风格（可选，英文描述，会覆盖上面的风格）" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                    <TextBlock Text="自定义风格" Style="{StaticResource T.Label}" VerticalAlignment="Center"/>
+                                    <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="可选。用英文描述想要的语气，例如 Speak like a calm squad leader。填了会覆盖上面选的说话风格。"/>
+                                </StackPanel>
                                 <TextBox x:Name="SendInstruction" LostFocus="Instruction_LostFocus"/>
                                 <Border Style="{StaticResource Inset}" Margin="0,16,0,0">
                                     <StackPanel>
-                                        <TextBlock Text="用一句话设计新的英文声音" Foreground="{StaticResource B.Text}" FontWeight="Medium"/>
-                                        <TextBlock Text="描述性别、年龄、口音、语速、情绪和说话场景，例如“二十出头的美国男生，嗓音略沙哑，说话随意、语速偏快，像和朋友开黑”。生成约需 10 秒，会自动试听并加入上面的列表。" Style="{StaticResource T.Caption}" Margin="0,4,0,10"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <TextBlock Text="用一句话设计新的英文声音" Foreground="{StaticResource B.Text}" FontWeight="Medium" VerticalAlignment="Center"/>
+                                            <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="描述性别、年龄、口音、语速、情绪和说话场景，例如“二十出头的美国男生，嗓音略沙哑，说话随意、语速偏快，像和朋友开黑”。&#x0a;生成约需 10 秒，会自动试听并加入上面的列表。"/>
+                                        </StackPanel>
                                         <DockPanel>
                                             <Button x:Name="DesignBtn" DockPanel.Dock="Right" Style="{StaticResource BtnPrimary}" Content="生成新音色" Margin="10,0,0,0" Click="DesignVoice_Click"/>
                                             <TextBox x:Name="DesignPrompt"/>
@@ -664,10 +674,7 @@
                                     <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource B.MateSoft}">
                                         <TextBlock Text="&#xE7F6;" FontFamily="{StaticResource F.Icon}" FontSize="13" Foreground="{StaticResource B.Mate}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
-                                    <StackPanel Margin="12,0,0,0">
-                                        <TextBlock Text="我听到的中文声音" Style="{StaticResource T.H2}"/>
-                                        <TextBlock Text="和队友原声区分开，选一个你听着舒服的声音" Style="{StaticResource T.Caption}"/>
-                                    </StackPanel>
+                                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="我听到的中文声音" Style="{StaticResource T.H2}"/>
                                 </StackPanel>
                                 <ListBox x:Name="RecvVoiceList" Style="{StaticResource VoiceList}" Tag="{StaticResource B.Mate}" Margin="0,16,0,8" SelectionChanged="Voice_Changed"/>
                                 <Grid>
@@ -701,15 +708,17 @@
 
                 <!-- ========== 浮窗与快捷键 ========== -->
                 <ScrollViewer x:Name="PageOverlay" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
-                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
-                        <TextBlock Text="浮窗与快捷键" Style="{StaticResource T.H1}"/>
-                        <TextBlock Text="浮窗默认鼠标穿透、不抢焦点。游戏请用“无边框全屏”。" Style="{StaticResource T.Body}" Margin="0,6,0,18"/>
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                        <TextBlock Text="浮窗与快捷键" Style="{StaticResource T.H1}" Margin="0,0,0,18"/>
 
                         <Border Style="{StaticResource Card}" Margin="0,0,0,14">
                             <StackPanel>
                                 <DockPanel>
                                     <CheckBox x:Name="OverlayVisible" DockPanel.Dock="Right" Style="{StaticResource Toggle}" Click="OverlayVisible_Click"/>
-                                    <TextBlock Text="游戏内浮窗" Style="{StaticResource T.H2}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="游戏内浮窗" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
+                                        <ContentControl Style="{StaticResource HelpTip}" ToolTip="浮窗鼠标穿透、不抢焦点，游戏请用“无边框全屏”。&#x0a;编辑时可以拖动、拖右下角改大小，旁边的工具栏可调背景、字号和文字颜色。&#x0a;浮窗拉得越高，显示的句子越多，最新的在最下面。"/>
+                                    </StackPanel>
                                 </DockPanel>
                                 <Border Style="{StaticResource Inset}" Margin="0,14,0,16">
                                     <DockPanel>
@@ -739,18 +748,13 @@
                                         <Slider x:Name="OvOpacity" Minimum="0.2" Maximum="1" SmallChange="0.05" ValueChanged="Overlay_Changed"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="2">
-                                        <DockPanel><TextBlock x:Name="OvHoldText" DockPanel.Dock="Right" Style="{StaticResource T.Caption}"/><TextBlock Text="每条字幕停留多久后淡出" Style="{StaticResource FieldLabel}"/></DockPanel>
+                                        <DockPanel><TextBlock x:Name="OvHoldText" DockPanel.Dock="Right" Style="{StaticResource T.Caption}"/><TextBlock Text="字幕停留多久后淡出" Style="{StaticResource FieldLabel}" ToolTip="拖到最右边 = 一直保留"/></DockPanel>
                                         <Slider x:Name="OvHold" Minimum="5" Maximum="125" SmallChange="5" IsSnapToTickEnabled="True" TickFrequency="5" ValueChanged="Overlay_Changed"/>
-                                        <TextBlock Text="拖到最右边 = 一直保留" Style="{StaticResource T.Caption}" Margin="0,4,0,0"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Row="2" Grid.Column="2" VerticalAlignment="Center">
-                                        <TextBlock Text="显示几句" Style="{StaticResource FieldLabel}"/>
-                                        <TextBlock Text="自动铺满浮窗：浮窗拉得越高，显示的句子越多，最新的在最下面。" Style="{StaticResource T.Caption}" TextWrapping="Wrap" LineHeight="18"/>
-                                    </StackPanel>
+                                    <CheckBox x:Name="OvShowOriginal" Grid.Row="2" Grid.Column="2" Style="{StaticResource Toggle}" VerticalAlignment="Bottom" Margin="0,0,0,2" Click="Overlay_Changed">
+                                        <TextBlock Text="译文下方显示原文" Foreground="{StaticResource B.Text}"/>
+                                    </CheckBox>
                                 </Grid>
-                                <CheckBox x:Name="OvShowOriginal" Style="{StaticResource Toggle}" Margin="0,16,0,0" Click="Overlay_Changed">
-                                    <TextBlock Text="在译文下方显示原文（小字）" Foreground="{StaticResource B.Text}"/>
-                                </CheckBox>
                             </StackPanel>
                         </Border>
 
@@ -758,9 +762,12 @@
                             <StackPanel>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="恢复默认" Click="ResetHotkeys_Click"/>
-                                    <TextBlock Text="快捷键" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="快捷键" Style="{StaticResource T.H2}" VerticalAlignment="Center"/>
+                                        <ContentControl Style="{StaticResource HelpTip}" ToolTip="点右侧按键，再按下新的键（支持鼠标侧键）。游戏在前台时同样有效。"/>
+                                    </StackPanel>
                                 </DockPanel>
-                                <TextBlock Text="点右侧按键，再按下新的键（支持鼠标侧键）。游戏在前台时同样有效。" Style="{StaticResource T.Caption}" Margin="0,4,0,10"/>
+                                <Border Height="6"/>
                                 <ItemsControl x:Name="HotkeyList">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -769,9 +776,9 @@
                                                     <Button DockPanel.Dock="Right" Style="{StaticResource BtnBase}" MinWidth="120" Click="RebindHotkey_Click" Tag="{Binding}">
                                                         <TextBlock Text="{Binding Display}" FontFamily="{StaticResource F.Mono}" FontSize="12.5"/>
                                                     </Button>
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource B.Text}" FontWeight="Medium"/>
-                                                        <TextBlock Text="{Binding Description}" Style="{StaticResource T.Caption}" Margin="0,2,0,0"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource B.Text}" FontWeight="Medium" VerticalAlignment="Center"/>
+                                                        <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="{Binding Description}"/>
                                                     </StackPanel>
                                                 </DockPanel>
                                             </Border>
@@ -797,10 +804,15 @@
                             </StackPanel>
                         </Button>
                         <StackPanel>
-                            <TextBlock Text="诊断与日志" Style="{StaticResource T.H1}"/>
-                            <TextBlock x:Name="DiagSummary" Text="每句话从说完到各阶段完成的耗时（毫秒）。" Style="{StaticResource T.Body}" Margin="0,6,0,0"/>
-                            <CheckBox x:Name="SaveAudioCheck" Style="{StaticResource Toggle}" Margin="0,12,0,0" Click="SaveAudio_Click">
-                                <TextBlock Foreground="{StaticResource B.Text}" TextWrapping="Wrap" MaxWidth="620"><Run Text="保存识别音频（用于改进识别）"/><Run Text="  把每句话的录音和识别结果存到日志文件夹的 utterances 里，只保存在本机。下次点“开始”生效。" Foreground="{StaticResource B.Text3}" FontSize="12"/></TextBlock>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="诊断与日志" Style="{StaticResource T.H1}" VerticalAlignment="Center"/>
+                                <ContentControl Style="{StaticResource HelpTip}" Margin="10,3,0,0" ToolTip="下面列出每句话从说完到识别、翻译、开始播放各用了多少毫秒，以及运行日志。"/>
+                            </StackPanel>
+                            <CheckBox x:Name="SaveAudioCheck" Style="{StaticResource Toggle}" Margin="0,16,0,0" Click="SaveAudio_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="保存识别音频" Foreground="{StaticResource B.Text}" VerticalAlignment="Center"/>
+                                    <ContentControl Style="{StaticResource HelpTipSmall}" ToolTip="把每句话的录音和识别结果存到日志文件夹的 utterances 里，用于改进识别。只保存在本机，下次点“开始”生效。"/>
+                                </StackPanel>
                             </CheckBox>
                             <Border Style="{StaticResource Card}" Padding="18,14" Margin="0,14,0,0" HorizontalAlignment="Left">
                                 <WrapPanel>
@@ -813,7 +825,7 @@
                                         <Border Style="{StaticResource SegmentHost}">
                                             <StackPanel Orientation="Horizontal">
                                                 <RadioButton x:Name="CloseAsk" Style="{StaticResource Segment}" GroupName="CloseAct" Content="每次询问" Click="CloseAction_Click"/>
-                                                <RadioButton x:Name="CloseTray" Style="{StaticResource Segment}" GroupName="CloseAct" Content="最小化到后台" Click="CloseAction_Click"/>
+                                                <RadioButton x:Name="CloseTray" Style="{StaticResource Segment}" GroupName="CloseAct" Content="最小化到托盘" Click="CloseAction_Click"/>
                                                 <RadioButton x:Name="CloseExit" Style="{StaticResource Segment}" GroupName="CloseAct" Content="彻底退出" Click="CloseAction_Click"/>
                                             </StackPanel>
                                         </Border>
@@ -824,7 +836,7 @@
                     </DockPanel>
                     <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16,12,6,8">
                         <Grid>
-                        <TextBlock x:Name="LogEmpty" Text="开始翻译后，这里会显示每句话各阶段的耗时和运行日志。" Style="{StaticResource T.Caption}"
+                        <TextBlock x:Name="LogEmpty" Text="暂无日志" Style="{StaticResource T.Caption}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="LogList">
@@ -894,23 +906,18 @@
             <Border x:Name="CloseCard" Style="{StaticResource FloatCard}" Width="440" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border.RenderTransform><ScaleTransform x:Name="CloseScale" CenterX="220" CenterY="140"/></Border.RenderTransform>
                 <StackPanel>
-                    <TextBlock Text="要关闭游戏双译吗？" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource B.Text}" FontFamily="{StaticResource F.Display}"/>
-                    <TextBlock Text="最小化后程序在屏幕右下角的托盘里继续运行，翻译、快捷键和游戏内浮窗都照常工作。" Style="{StaticResource T.Caption}"
-                               TextWrapping="Wrap" Margin="0,6,0,16" LineHeight="18"/>
+                    <TextBlock Text="要关闭游戏双译吗？" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource B.Text}" FontFamily="{StaticResource F.Display}" Margin="0,0,0,16"/>
                     <RadioButton x:Name="ChoiceTray" Style="{StaticResource ChoiceCard}" GroupName="CloseChoice" IsChecked="True">
                         <StackPanel>
-                            <TextBlock Text="最小化到后台（推荐）" FontWeight="Medium" Foreground="{StaticResource B.Text}"/>
-                            <TextBlock Text="不占任务栏，双击右下角托盘图标可以重新打开" Style="{StaticResource T.Caption}" Margin="0,3,0,0"/>
+                            <TextBlock Text="最小化到托盘（推荐）" FontWeight="Medium" Foreground="{StaticResource B.Text}"/>
+                            <TextBlock Text="翻译和快捷键照常工作，双击托盘图标重新打开" Style="{StaticResource T.Caption}" Margin="0,3,0,0"/>
                         </StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="ChoiceExit" Style="{StaticResource ChoiceCard}" GroupName="CloseChoice">
-                        <StackPanel>
-                            <TextBlock Text="彻底退出" FontWeight="Medium" Foreground="{StaticResource B.Text}"/>
-                            <TextBlock Text="停止翻译并关闭程序" Style="{StaticResource T.Caption}" Margin="0,3,0,0"/>
-                        </StackPanel>
+                        <TextBlock Text="彻底退出" FontWeight="Medium" Foreground="{StaticResource B.Text}"/>
                     </RadioButton>
                     <CheckBox x:Name="ChoiceRemember" Style="{StaticResource Toggle}" Margin="2,8,0,0">
-                        <TextBlock Foreground="{StaticResource B.Text2}" FontSize="12.5"><Run Text="记住我的选择，不再询问"/><Run Text="（可在“诊断与日志”里修改）" Foreground="{StaticResource B.Text3}"/></TextBlock>
+                        <TextBlock Text="不再询问" Foreground="{StaticResource B.Text2}" FontSize="12.5" ToolTip="以后可以在“诊断与日志”里修改"/>
                     </CheckBox>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
                         <Button Style="{StaticResource BtnGhost}" Content="取消" Click="CloseCancel_Click" IsCancel="True"/>

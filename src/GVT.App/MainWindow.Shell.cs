@@ -96,9 +96,9 @@ public partial class MainWindow
         if (missing)
         {
             var names = new List<string>();
-            if (!d.SendCable) names.Add("VB-CABLE（把英文译音送进游戏）");
-            if (!d.RecvCable) names.Add("Hi-Fi Cable（接收队友声音）");
-            EnvMissingText.Text = $"这台电脑还缺少虚拟声卡：{string.Join("、", names)}。\n点右上角“安装环境”：自动从 VB-Audio 官网下载、校验签名后安装并设置好，会弹出一次管理员授权，大约 1 分钟（需要联网）。";
+            if (!d.SendCable) names.Add("VB-CABLE");
+            if (!d.RecvCable) names.Add("Hi-Fi Cable");
+            EnvMissingText.Text = $"缺少虚拟声卡 {string.Join(" 和 ", names)}。点右上角“安装环境”一键装好（需要联网，会弹一次管理员授权）。";
         }
     }
 
@@ -295,7 +295,7 @@ public partial class MainWindow
     private void UpdateBudgetTexts()
     {
         var limit = BudgetPicker.Describe(_cfg.Budget.SessionBudgetYuan);
-        SideBudget.Text = $"上限 {limit} · 点击修改";
+        SideBudget.Text = $"上限 {limit}";
         DiagBudget.Value = _cfg.Budget.SessionBudgetYuan;
         var cost = _engine?.Usage.CostYuan ?? 0;
         PopupCost.Text = _engine == null ? "当前没有在翻译。" : $"这次已花费 ¥{cost:F3}。";
@@ -484,6 +484,15 @@ public partial class MainWindow
         await Task.Delay(500);
         if (BudgetPopup.Child is FrameworkElement pop) SaveElementPng(pop, P("budget"));
         BudgetPopup.IsOpen = false;
+
+        // 说明气泡：直接打开“队友原声”旁问号的气泡
+        NavHome.IsChecked = true;
+        await Task.Delay(300);
+        var tip = new ToolTip { Content = ListenTip.ToolTip, PlacementTarget = ListenTip };
+        tip.IsOpen = true;
+        await Task.Delay(400);
+        SaveElementPng(tip, P("tooltip"));
+        tip.IsOpen = false;
     }
 
     private static void SaveElementPng(FrameworkElement el, string path)

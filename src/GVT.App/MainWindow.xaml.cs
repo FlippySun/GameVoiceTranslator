@@ -270,9 +270,6 @@ public partial class MainWindow : Window
         // 没配置时，把状态标签换成直达阿里云百炼创建 Key 页面的按钮
         KeyChip.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
         CreateKeyBtn.Visibility = has ? Visibility.Collapsed : Visibility.Visible;
-        KeyHint.Text = has
-            ? "使用“按量付费”的 Key（sk-ws- 开头）。用 Windows 当前用户加密保存在本机，不会以明文写入磁盘。"
-            : "还没有配置。点右侧按钮打开阿里云百炼，登录后创建一个“按量付费”的 Key（sk-ws- 开头），复制回来粘贴到下面保存。Key 用 Windows 当前用户加密保存在本机。";
         RecheckNotice();
     }
 
@@ -393,13 +390,12 @@ public partial class MainWindow : Window
         HeroTitle.Text = running ? "翻译进行中" : "准备就绪";
         var send = VoiceCatalog.Find(_cfg.Send.Voice)?.Name ?? _cfg.Send.Voice;
         var recv = VoiceCatalog.Find(_cfg.Receive.Voice)?.Name ?? _cfg.Receive.Voice;
-        HeroSub.Text = running
-            ? $"按住 {KeyName(_cfg.Hotkeys.PushToTalk)} 说话。队友听到 {send} 的英文，你听到 {recv} 的中文。"
-            : "点击左侧按钮开始。开始前确认游戏的麦克风是 CABLE Output、语音输出是 Hi-Fi Cable Input。";
         SendSub.Text = $"中文 → 英文 · {send}";
         RecvSub.Text = $"英文 → 中文 · {recv}";
         SendHint.Text = _cfg.Send.Gate == GateMode.PushToTalk ? $"按住 {KeyName(_cfg.Hotkeys.PushToTalk)} 说话" : "语音激活：直接说话";
         RecvHint.Text = $"按住 {KeyName(_cfg.Hotkeys.HoldOriginal)} 临时听原声";
+        ListenTip.ToolTip = "压低，听译音：队友原声一直压得较低，以中文译音为主。\n原声 + 译音：原声保持正常音量，播译音时稍微压低。\n"
+            + $"任何时候按住 {KeyName(_cfg.Hotkeys.HoldOriginal)} 都可以只听原声。";
         SideDot.Tag = running;
         SideDot.Fill = (Brush)FindResource(running ? "B.Ok" : "B.Text3");
         SideStatus.Text = running ? "翻译运行中" : "未运行";
@@ -587,7 +583,7 @@ public partial class MainWindow : Window
         OvOpacity.Value = o.Opacity;
         OvHold.Value = o.HoldSeconds <= 0 ? OvHold.Maximum : Math.Min(o.HoldSeconds, OvHold.Maximum - 5);
         OvShowOriginal.IsChecked = o.ShowOriginal;
-        OverlayEditHint.Text = $"按 {KeyName(_cfg.Hotkeys.OverlayEdit)} 进入编辑：拖动移动、拖右下角改大小，旁边的工具栏可调背景透明度、字号和各类文字颜色；再按一次锁定。";
+        OverlayEditHint.Text = $"按 {KeyName(_cfg.Hotkeys.OverlayEdit)} 进入编辑，再按一次锁定";
         UpdateOverlayTexts();
     }
 
@@ -650,7 +646,7 @@ public partial class MainWindow : Window
         Row(nameof(HotkeyConfig.ToggleSend), "停止 / 恢复发送", "立即静音虚拟麦克风，清空待发内容");
         Row(nameof(HotkeyConfig.HoldOriginal), "按住听原声", "暂停中文播报，队友原声恢复正常音量");
         Row(nameof(HotkeyConfig.ReplayLast), "重播上一句中文", "只在自己耳机里重播，不会发给队友");
-        Row(nameof(HotkeyConfig.ToggleReceive), "停止 / 恢复中文播报", "原声照常");
+        Row(nameof(HotkeyConfig.ToggleReceive), "停止 / 恢复中文播报", "队友原声照常能听到");
         Row(nameof(HotkeyConfig.OverlayEdit), "编辑浮窗", "进入后可拖动、调整大小，并调背景透明度、字号、文字颜色；再按一次锁定");
         foreach (var r in _hotkeyRows) r.Display = KeyName(GetHotkey(r.Key));
         HotkeyList.ItemsSource = null;
