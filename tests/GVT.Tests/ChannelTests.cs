@@ -19,11 +19,12 @@ public class ChannelTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class FakeTts(float value, int chunks) : ITtsSession
+    private sealed class FakeTts(float value, int chunks, IReadOnlyDictionary<string, float>? byText = null) : ITtsSession
     {
         public int SampleRate => 16000;
         public async Task<int> SpeakAsync(string text, Action<float[]> onAudio, CancellationToken ct)
         {
+            if (byText != null && byText.TryGetValue(text, out var v)) value = v;
             for (int i = 0; i < chunks; i++)
             {
                 await Task.Delay(5, ct);
@@ -49,6 +50,8 @@ public class ChannelTests
     {
         public readonly Queue<Func<Task<string>>> AsrResults = new();
         public readonly Queue<float> TtsValues = new();
+        /// <summary>按译文指定合成的样本值（句子并发处理时，谁先开始合成不确定，按文本对应才稳定）。</summary>
+        public readonly Dictionary<string, float> TtsByText = new();
         public readonly List<FakeAsr> Asrs = new();
         public FakeTranslator Fake { get; } = new();
         public ITranslator Translator => Fake;
@@ -59,7 +62,7 @@ public class ChannelTests
             Asrs.Add(a);
             return a;
         }
-        public ITtsSession PrepareTts(GVT.Core.Config.TtsVoice v) => new FakeTts(TtsValues.Dequeue(), 3);
+        public ITtsSession PrepareTts(GVT.Core.Config.TtsVoice v) => new FakeTts(TtsValues.TryDequeue(out var x) ? x : 0f, 3, TtsByText);
     }
 
     private static (TranslationChannel ch, SpeechQueuePlayer player, FakeServices svc, List<LatencyRecord> done) Make(
@@ -137,8 +140,8 @@ public class ChannelTests
         svc.Fake.Gate = t => t == "第一句" ? trGate.Task : Task.CompletedTask;
         svc.AsrResults.Enqueue(() => Task.FromResult("第一句"));
         svc.AsrResults.Enqueue(() => Task.FromResult("第二句"));
-        svc.TtsValues.Enqueue(0.1f);
-        svc.TtsValues.Enqueue(0.2f);
+        svc.TtsByText["T:第一句"] = 0.1f;
+        svc.TtsByText["T:第二句"] = 0.2f;
 
         ch.BeginUtterance(new float[160]);
         ch.EndUtterance();
